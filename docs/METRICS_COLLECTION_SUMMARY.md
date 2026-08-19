@@ -77,7 +77,7 @@
 ## 7. 모델별 GPU Hour 수집
 
 **비용의 정본은 할당.** `서비스 일 비용 = 할당 GPU-hours(GPU 대시보드) × 기종별 단가` — 가동 여부와 무관하게 발생.
-`/v1/metrics`의 gpu 블록은 이 비용의 **용도 분해**: model × gpuType × category별로 **gpuCount(GPU 수)** 와 **gpuHours(= GPU 수 × 시간, 모델에 GPU가 매핑·할당된 시간)** 를 일별 제공. gpuType은 **단순 기종 표기**(A100, H100 등). gpuCount는 해당일 매핑된 GPU 수(하루 중 증감 시 최대 수 기준 — 실제 총량은 gpuHours가 표현).
+`/v1/metrics`의 gpu 블록은 이 비용의 **용도 분해**: model × gpuType × category별로 **gpuCount(GPU 수)** 와 **gpuHours(= GPU 수 × 시간, 모델에 GPU가 매핑·할당된 시간)** 를 일별 제공. gpuType은 **단순 기종 표기**(A100, H100 등). gpuCount는 해당일 매핑된 GPU 수(하루 중 증감 시 최대 수 기준 — 실제 총량은 gpuHours가 표현). **모델 비용은 gpuHours × 기종 단가로만 계산**(gpuCount는 "몇 장 점유"의 표시·검증용). 하루 중 기종이 바뀌면 gpuType별로 행을 나눠 제공.
 
 | category | 뜻 | 제공 주체 |
 |---|---|---|

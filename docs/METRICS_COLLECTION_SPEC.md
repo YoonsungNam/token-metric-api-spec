@@ -48,31 +48,35 @@
 | ⑥ | `/metrics` URL | (케이스 A~C만) 스크랩 대상 URL + 엔진 종류 |
 
 ```yaml
-# 한 서비스 분 예시
-serviceGroup: claude
-service: claude-cowork
-owner: kim@company.com
-gpuAllocationUnit: "k8s-ns:claude-cowork-prod"
-engine: { type: vllm }                      # 버전은 API 자기신고로 수신 — 수기 갱신 불필요
-metricsUrl: "http://cowork-vllm.internal:8000/metrics"
-models:
+# 한 서비스 분 예시 — 주석의 ①~⑥은 위 표의 항목 번호
+serviceGroup: claude                                     # ① 서비스 표기
+service: claude-cowork                                   # ①
+owner: kim@company.com                                   # ① 담당자
+models:                                                  # ② 모델 표기 (canonical·family·sizeClass·alias)
   - { canonical: opus, family: claude, sizeClass: L, aliases: ["anthropic/claude-opus", "opus-fp8"] }
-consumes: []
-serviceAccounts: {}
+gpuAllocationUnit: "k8s-ns:claude-cowork-prod"           # ③ GPU 할당 매핑 (GPU 대시보드 할당 단위)
+consumes: []                                             # ④ 소비 관계 — 예: [{ platform: llm-gateway, model: llama3.3-70b }]
+serviceAccounts: {}                                      # ⑤ 서비스 계정 매핑 (플랫폼 제공자만) — 예: { svc-key-a1: chat-assistant }
+metricsUrl: "http://cowork-vllm.internal:8000/metrics"   # ⑥ /metrics URL (케이스 A~C만)
+engine: { type: vllm }                                   # ⑥ 엔진 종류 — 버전은 API 자기신고로 수신 (수기 갱신 불필요)
 ```
 
-- 미등록 모델 표기가 데이터에 유입되면 중앙이 알림 → "기존 canonical의 alias인지 / 새 canonical인지" 분류만 회신하면 된다.
+**갱신이 끊겨도 중앙이 감지한다.** 취합본 최신화를 담당자의 기억에 맡기지 않는다 — 취합본과 실데이터가 어긋나면 시스템이 잡아서 알림을 보내고, 담당자는 그때 갱신하면 된다:
+
+- 미등록 모델 표기 유입 → "미등록" 격리 + 알림 (모델 추가·교체가 자동 감지됨). "기존 canonical의 alias인지 / 새 canonical인지" 분류만 회신
+- `engine` 자기신고 ↔ 취합본 불일치 → 알림 (엔진 교체 감지)
+- gpu 블록 검증 규칙 위반(§3), GPU 할당 단위 ↔ 매핑 불일치 → 알림
 
 ## 3. gpu 블록 — 모델별 GPU Hour
 
 model × gpuType × category 단위로 일별 제공:
 
-| 필드 | 정의 |
-|---|---|
-| `gpuType` | 단순 기종 표기 (예: `H100`, `A100`) |
-| `gpuCount` | 해당일 그 모델에 매핑된 GPU 수 (하루 중 증감 시 **최대 수** 기준) |
-| `gpuHours` | GPU 수 × 모델에 매핑·할당된 시간. 예: H100 4장 × 24h = 96.0 |
-| `category` | 아래 3종 |
+| 필드 | 정의 | 역할 |
+|---|---|---|
+| `gpuType` | 단순 기종 표기 (예: `H100`, `A100`) | 단가표 키 |
+| `gpuCount` | 해당일 그 모델에 매핑된 GPU 장수 (하루 중 증감 시 **최대** 기준) | **비용 계산에 미사용** — "몇 장 점유"의 표시·검증용 |
+| `gpuHours` | GPU 수 × 모델에 매핑·할당된 시간. 예: H100 4장 × 24h = 96.0 | **비용의 유일한 근거** |
+| `category` | 아래 3종 | 용도 분해 |
 
 | category | 의미 | model 값 |
 |---|---|---|
@@ -83,6 +87,17 @@ model × gpuType × category 단위로 일별 제공:
 - **유휴는 제공하지 않는다** — 중앙이 `할당(GPU 대시보드) − Σ제공`으로 산출.
 - 모델 교체·증설 이력은 daily 데이터에 자연 반영 — effective 필드 불필요.
 - **검증 규칙** (위반 시 담당자 알림): ① 기종별 Σ제공 gpuHours ≤ 할당 GPU-hours ② 항목별 gpuHours ≤ gpuCount × 24 ③ serving/standby의 model `unknown` 금지
+
+**비용 계산과 하루 중 변동 처리**
+
+- 모델 비용은 중앙이 **`Σ기종 (gpuHours × 기종 단가)`** 로 계산한다. gpuCount는 비용에 쓰이지 않는다 (gpuCount × 단가로 계산하지 말 것).
+- **장수 증감**: gpuHours에 그대로 반영된다. 예: 2장으로 12h + 증설 후 4장으로 12h → `gpuHours: 72.0, gpuCount: 4`
+- **기종 변경**: gpuType별로 행을 나눈다. 예: A100 4장으로 10h 운영 후 H100 4장으로 이전, 14h 운영 →
+
+```json
+{ "model": "llama3-70b", "gpuType": "A100", "gpuCount": 4, "gpuHours": 40.0, "category": "serving" },
+{ "model": "llama3-70b", "gpuType": "H100", "gpuCount": 4, "gpuHours": 56.0, "category": "serving" }
+```
 
 **사내 플랫폼 관련**
 
@@ -200,7 +215,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD
 | `gpu[]` | array | O (빈 배열 허용) | |
 | `gpu[].model` | string | O | canonical 표기. `"unknown"`은 category=test만 |
 | `gpu[].gpuType` | string | O | 단순 기종 표기 (`H100`, `A100`) |
-| `gpu[].gpuCount` | number | O | 해당일 매핑 GPU 수 (증감 시 최대 기준) |
+| `gpu[].gpuCount` | number | O | 해당일 매핑 GPU 장수 (증감 시 최대 기준) — 비용 계산 미사용, 표시·검증용 (§3) |
 | `gpu[].gpuHours` | number | O | GPU 수 × 매핑·할당 시간 (≤ gpuCount × 24) |
 | `gpu[].category` | enum | O | `serving` \| `standby` \| `test` |
 | `serving[]` | array | X | 케이스 D~E 팀만 |
