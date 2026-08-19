@@ -90,7 +90,14 @@ model × gpuType × category 단위로 일별 제공:
 
 **비용 계산과 하루 중 변동 처리**
 
-- 모델 비용은 중앙이 **`Σ기종 (gpuHours × 기종 단가)`** 로 계산한다. **단가의 단위는 원/GPU·hour** (GPU 1장의 시간당 TCO) — gpuHours가 GPU·hour 단위이므로 곱이 그대로 원이 된다. gpuCount는 비용에 쓰이지 않는다 (gpuCount × 단가로 계산하지 말 것).
+- 모델 비용은 중앙이 **`Σ기종 (gpuHours × 기종 단가)`** 로 계산한다. **단가의 단위는 원/GPU·hour** (GPU 1장의 시간당 TCO) — 장수는 gpuHours(= GPU 수 × 시간)에 이미 곱해져 있으므로, 단가를 곱하면 차원이 그대로 소거되어 원이 된다:
+
+```
+gpuHours [GPU·h] × 단가 [원/GPU·h] = 비용 [원]      ← GPU와 hour가 모두 소거
+예: 96 GPU·h × 6,500원/GPU·h = 624,000원  (= 4장 × 24h × 6,500원)
+```
+
+- gpuCount는 비용에 쓰이지 않는다 — gpuCount × 단가로 계산하면 장수가 이중으로 곱해진다.
 - **장수 증감**: gpuHours에 그대로 반영된다. 예: 2장으로 12h + 증설 후 4장으로 12h → `gpuHours: 72.0, gpuCount: 4`
 - **기종 변경**: gpuType별로 행을 나눈다. 예: A100 4장으로 10h 운영 후 H100 4장으로 이전, 14h 운영 →
 
