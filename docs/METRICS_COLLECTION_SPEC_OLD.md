@@ -201,6 +201,7 @@ serviceAccounts: {}     # 플랫폼인 경우: 서비스 계정 ↔ 소비 서�
 ```
 서비스 일 비용 = 할당 GPU-hours (GPU 대시보드) × 기종별 단가
 할당 GPU-hours = 할당 GPU 수 × 24h (기종별)
+기종별 단가   = 원/GPU·hour (GPU 1장의 시간당 TCO)
 ```
 
 `/v1/metrics`의 gpu 블록은 **이 할당 비용이 어떤 용도로 쓰였는지의 분해**다. 서비스는 service × model × gpuType × category 단위로 일별 `gpuCount`·`gpuHours`를 제공한다.
@@ -225,7 +226,7 @@ serviceAccounts: {}     # 플랫폼인 경우: 서비스 계정 ↔ 소비 서�
 ### 4.2 유효 기간(effective) 처리
 
 - 모델 교체·증설 이력은 **daily 팩트에 내재**된다. 각 날짜의 응답이 그날 실제 돌아간 구성을 반영하므로 별도의 effective_from/to를 제공할 필요 없다.
-- **GPU 단가표만 예외**: 중앙이 (gpuType, 시간당 단가, effective_from)으로 이력 관리한다. 단가 개정이 과거 비용을 소급 변경하지 않기 위함. 담당자와 무관한 중앙 내부 마스터.
+- **GPU 단가표만 예외**: 중앙이 (gpuType, 원/GPU·hour 단가, effective_from)으로 이력 관리한다. 단가 개정이 과거 비용을 소급 변경하지 않기 위함. 담당자와 무관한 중앙 내부 마스터.
 
 ### 4.3 사내 서비스 간 사용 — 서비스 A가 서비스 B(LLM API 플랫폼)를 쓰는 경우
 
