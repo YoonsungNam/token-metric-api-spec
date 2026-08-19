@@ -49,7 +49,7 @@
 - 구조: `serviceGroup > service > model`, **수집 단위는 service** (serviceGroup은 합산 뷰)
 - 기존 토큰 API와 **같은 문자열** 필수 — `claude` vs `Claude` 불일치 시 JOIN 실패
 - 하위 서비스에 못 넣는 그룹 공통 GPU는 별도 service(예: `claude-shared`)로 등록
-- `model` 필수, 특정 불가 시 `"unknown"`
+- `model` 필수 — `"unknown"`은 **test 카테고리에서만 허용** (serving/standby에서는 금지, 위반 시 데이터 오류 알림)
 
 ## 5. 모델명 규칙 (canonical id)
 
@@ -65,11 +65,12 @@
 - **기존 표기는 바꿀 필요 없음** — alias로 흡수. 미등록 표기가 데이터에 유입되면 "미등록"으로 격리 → 담당자 확인 후 canonical/alias로 분류·반영
 - vLLM/SGLang: `--served-model-name`을 canonical로 설정하면 정규화 자체가 불필요
 - 현황판은 **family → canonical → service 3단 드릴다운** — 전사 총량과 "누가 쓰는지"를 함께 봄
+- **체급(sizeClass) 기재**: S(~15B) / M(~40B) / L(40B+), MoE는 활성 파라미터 기준 — 효율 랭킹은 같은 체급 안에서만 비교 (§12)
 
 ## 6. 관리 정보 취합 — 엑셀
 
 - 서비스·모델 표기 등 관리 정보는 **엑셀 양식으로 취합**한다 (별도 시스템·등록 화면 없음, 취합 방식은 추후 변경 가능)
-- 취합 항목: ① 서비스 표기(serviceGroup·service·담당자) ② 모델 canonical + alias 목록 ③ GPU 대시보드 할당 단위 매핑 ④ 소비 관계("A → B의 모델 M") ⑤ (플랫폼) 서비스 계정↔소비 서비스 매핑 ⑥ (케이스 A~C) `/metrics` URL
+- 취합 항목: ① 서비스 표기(serviceGroup·service·담당자) ② 모델 canonical + alias 목록 + 체급(sizeClass) ③ GPU 대시보드 할당 단위 매핑 ④ 소비 관계("A → B의 모델 M") ⑤ (플랫폼) 서비스 계정↔소비 서비스 매핑 ⑥ (케이스 A~C) `/metrics` URL
 - 엔진 종류·버전은 `/v1/metrics` 응답의 `engine` 자기신고로 수신 — **수기 갱신 불필요**
 - 미등록 모델 표기가 유입되면 담당자 확인을 거쳐 취합본에 반영 (§5)
 
@@ -85,7 +86,7 @@
 | `test` | 테스트·실험 (model unknown 허용) | 서비스 |
 | (유휴) | 잔여 | **제공 안 함 — 중앙이 `할당 − Σ제공`으로 산출** |
 
-- 정합성 검증: 기종별 Σ제공 gpuHours ≤ 할당 GPU-hours, 항목별 gpuHours ≤ gpuCount × 24
+- 정합성 검증: 기종별 Σ제공 gpuHours ≤ 할당 GPU-hours, 항목별 gpuHours ≤ gpuCount × 24, serving/standby의 model `unknown` 금지
 - **효율 지표(원/1M토큰, 토큰/GPU-hour)는 serving만 사용** — HA 갖춘 팀이 비효율로 보이지 않도록. standby 비용·유휴율·활용률은 별도 지표
 - **필수 준비**: GPU 대시보드 할당 단위(프로젝트/네임스페이스 등) ↔ service 매핑을 취합본에 제출. 매핑 불가 시 제공 기반 폴백(단, 유휴 미포착 → 비용 과소계상 가능)
 - 모델 교체·증설 이력은 daily 데이터에 자연 반영 — effective 필드 불필요. GPU 단가표 이력만 중앙이 관리
@@ -174,8 +175,9 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD   (KST 기준, 사내망·
 
 ## 12. 이걸 하면 보게 되는 것 (중앙 계산 — 참고)
 
-일 비용(할당 기준) · 활용률 · 유휴율 · 배부 비용 · **원/1M토큰** · 토큰/GPU-hour · standby 비용 · TTFT/ITL 추이
+일 비용(할당 기준) · 활용률 · 유휴율 · 배부 비용 · **원/1M토큰** · 토큰/GPU-hour · standby 비용 · TTFT/ITL 추이 · **모델 채택도**(사용 서비스·사용자 수, 토큰 점유율 추세)
 → 서비스 상세는 `할당 → 용도 분해 → 성능 → 토큰 산출 → 비용·효율` 순의 표준 뷰로 통일 (효율 지표는 serving만, 성능은 서비스·모델 단위만)
+→ **효율 랭킹은 체급(sizeClass) 내에서만 표시** — 라지모델의 가치는 채택도(많은 서비스·사용자가 찾는다는 사실)로 강조. 품질 점수 축은 2단계 검토
 
 ## 13. 일정
 
@@ -188,7 +190,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD   (KST 기준, 사내망·
 - [ ] GPU 대시보드에서 할당 단위 확인 + service 매핑을 취합본에 제출했는가?
 - [ ] 모델별 GPU Hour를 serving / standby / test로 분류·제공 가능한가? (유휴는 제공 불필요 — 중앙 산출)
 - [ ] 추론 엔진 확인 → 케이스 A~F 판별 + `engine` 자기신고 포함하는가? (버전 수기 갱신 불필요)
-- [ ] 모델의 모든 표기(HF 경로·served-model-name·기존 토큰 API 표기·외부 API 문자열)를 canonical + alias로 정리해 제출했는가? 사내 파인튜닝은 `-ft-{용도}`로 분리했는가?
+- [ ] 모델의 모든 표기(HF 경로·served-model-name·기존 토큰 API 표기·외부 API 문자열)를 canonical + alias로 정리해 제출했는가? 사내 파인튜닝은 `-ft-{용도}`로 분리했는가? 체급(sizeClass)을 기재했는가?
 - [ ] (케이스 A~C) `/metrics` URL 제출 + 중앙 Prometheus 접근 개방 가능한가?
 - [ ] (케이스 D) TTFT/ITL 측정 로깅 + 레플리카 통합 집계 가능한가?
 - [ ] `/v1/metrics`를 02:00 이전에 전일 데이터 확정 상태로 제공 가능한가?
