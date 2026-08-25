@@ -59,11 +59,15 @@ models:                                       # ② 쓰는 모델 전부
     family: claude
     sizeClass: null                           #    사외 모델은 파라미터 비공개 — 생략 가능
     aliases: ["claude-sonnet-4-5-20250929", "claude-sonnet-4-5"]
-  - { canonical: llama3.3-70b }               #    사내 플랫폼 경유 — 정의는 플랫폼이 등재, 이름만 참조
+  - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 정의는 플랫폼이 등재, 이름만 참조
 gpuAllocationUnit: null                       # ③ GPU 할당 없음
 consumes:                                     # ④ models 중 외부 조달 모델의 출처 — 없는 모델 = 자체 서빙
-  - { model: claude-sonnet-4.5, provider: anthropic-api, type: 사외 }
-  - { model: llama3.3-70b, provider: llm-gateway, type: 사내 }
+  - model: claude-sonnet-4.5
+    provider: anthropic-api
+    type: 사외
+  - model: llama3.3-70b
+    provider: llm-gateway
+    type: 사내
 serviceAccounts: {}                           # ⑤ 플랫폼 제공자가 아니므로 비움
 metricsUrl: null                              # ⑥ 스크랩 대상 없음 (§4 케이스 E)
 engine: null
@@ -84,7 +88,8 @@ gpuAllocationUnit: "k8s-ns:ds-assistant-prod" # ③ GPU 대시보드에서 우�
 consumes: []                                  # ④ 비어 있음 = 전 모델 자체 서빙
 serviceAccounts: {}
 metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # ⑥ §4 케이스 A — 이것으로 serving 블록 생략
-engine: { type: vllm }                        # ⑥ 버전은 API 자기신고로 수신 — 수기 갱신 불필요
+engine:                                       # ⑥ 버전은 API 자기신고로 수신 — 수기 갱신 불필요
+  type: vllm
 ```
 
 *유형 3 — GPU + LLM API 병행 (하이브리드)*: 일반 요청은 자체 GPU의 중형 모델, 대형 요청은 사내 플랫폼으로
@@ -94,17 +99,29 @@ serviceGroup: search                          # ①
 service: doc-summary                          # ①
 owner: lee@company.com                        # ①
 models:                                       # ② 쓰는 모델 전부
-  - { canonical: qwen3-32b, family: qwen3, sizeClass: M, aliases: ["Qwen/Qwen3-32B"] }   # 자체 서빙
-  - { canonical: llama3.3-70b }               #    사내 플랫폼 경유 — 이름만 참조
+  - canonical: qwen3-32b                      #    자체 서빙
+    family: qwen3
+    sizeClass: M
+    aliases: ["Qwen/Qwen3-32B"]
+  - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 이름만 참조
 gpuAllocationUnit: "k8s-ns:doc-summary-prod"  # ③ 자체 GPU 할당분
 consumes:                                     # ④ llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
-  - { model: llama3.3-70b, provider: llm-gateway, type: 사내 }
+  - model: llama3.3-70b
+    provider: llm-gateway
+    type: 사내
 serviceAccounts: {}
 metricsUrl: null                              # ⑥ 자체 구현 서빙 (§4 케이스 D) — serving 블록 직접 채움
-engine: { type: custom }
+engine:
+  type: custom
 ```
 
-- 플랫폼 **제공자**라면 ⑤를 채운다 — 예: `serviceAccounts: { svc-key-a1: hr-chatbot }` (발급한 API 키 ↔ 소비 서비스)
+- 플랫폼 **제공자**라면 ⑤를 채운다 (발급한 API 키 ↔ 소비 서비스):
+
+```yaml
+serviceAccounts:
+  svc-key-a1: hr-chatbot
+  svc-key-b2: doc-summary
+```
 
 **모델 표기(②) 작성법**
 
