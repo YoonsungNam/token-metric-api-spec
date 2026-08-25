@@ -41,7 +41,7 @@
 |---|---|---|
 | [1] | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`ds-assistant` ≠ `DS-Assistant`) |
 | [2] | 모델 표기 | 서비스가 **사용하는 모든 모델** — 자체 서빙, 사내 플랫폼 경유, 사외 AI 모델 API 직접 호출 전부. canonical 정의(alias·family·sizeClass)는 **서빙 주체가 등재** — 사내 플랫폼 경유 모델은 이름만 참조로 적는다 |
-| [3] | GPU 할당 매핑 | 운영자가 GPU 대시보드에서 이 서비스의 **할당량(고정 쿼터)을 조회할 때 쓰는 키** — 우리 GPU가 배정된 할당 단위(k8s 네임스페이스·프로젝트명 등)를 적는다. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
+| [3] | GPU 할당 매핑 (`gpuDashboardUnit`) | **GPU 대시보드에서 우리 서비스의 할당 unit을 가리키는 키** — 운영자가 이 키로 할당량(고정 쿼터)을 조회한다. 포맷: `인프라유형:워크그룹:unit이름` (예: `k8s:ds-team:ds-assistant-prod`) — GPU 대시보드에 표기된 그대로 적는다. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
 | [4] | 소비 관계 (consumes) | **models 중 외부에서 조달하는 모델의 출처** — 어떤 모델을 어떤 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API) / 사외 AI 모델 API에서 쓰는지. **consumes에 없는 모델 = 자체 GPU 서빙** |
 | [5] | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
 | [6] | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
@@ -60,7 +60,7 @@ models:                                       # [2] 쓰는 모델 전부
     sizeClass: null                           #    사외 모델은 파라미터 비공개 — 생략 가능
     aliases: ["claude-sonnet-4-5-20250929", "claude-sonnet-4-5"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 정의는 플랫폼이 등재, 이름만 참조
-gpuAllocationUnit: null                       # [3] GPU 할당 없음
+gpuDashboardUnit: null                        # [3] GPU 할당 없음
 consumes:                                     # [4] models 중 외부 조달 모델의 출처 — 없는 모델 = 자체 서빙
   - model: claude-sonnet-4.5
     provider: anthropic-api
@@ -84,7 +84,7 @@ models:                                       # [2] 위 "작성 과정 예시"�
     family: llama3.3
     sizeClass: L
     aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
-gpuAllocationUnit: "k8s-ns:ds-assistant-prod" # [3] GPU 대시보드에서 우리 서비스의 할당 단위 (유형:식별자) — 할당량 조회 키
+gpuDashboardUnit: "k8s:ds-team:ds-assistant-prod"   # [3] 인프라유형:워크그룹:unit이름 — GPU 대시보드의 할당 unit (할당량 조회 키)
 consumes: []                                  # [4] 비어 있음 = 전 모델 자체 서빙
 serviceAccounts: {}
 metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # [6] §4 케이스 A — 이것으로 serving 블록 생략
@@ -104,7 +104,7 @@ models:                                       # [2] 쓰는 모델 전부
     sizeClass: M
     aliases: ["Qwen/Qwen3-32B"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 이름만 참조
-gpuAllocationUnit: "k8s-ns:doc-summary-prod"  # [3] 자체 GPU 할당분
+gpuDashboardUnit: "k8s:search-team:doc-summary-prod"   # [3] 자체 GPU 할당분
 consumes:                                     # [4] llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
   - model: llama3.3-70b
     provider: llm-gateway
