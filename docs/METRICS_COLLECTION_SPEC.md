@@ -39,27 +39,66 @@
 
 | # | 항목 | 내용 |
 |---|---|---|
-| ① | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`claude` ≠ `Claude`) |
+| ① | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`ds-assistant` ≠ `DS-Assistant`) |
 | ② | 모델 표기 | canonical + alias 목록 + family + 체급(sizeClass: S ~15B / M ~40B / L 40B+) |
 | ③ | GPU 할당 매핑 | 운영자가 GPU 대시보드에서 이 서비스의 **할당량(고정 쿼터)을 조회할 때 쓰는 키** — 우리 GPU가 배정된 할당 단위(k8s 네임스페이스·프로젝트명 등)를 적는다. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
 | ④ | 소비 관계 | "우리 서비스 → 어느 플랫폼의 어느 모델" — 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API)을 쓰는 경우만 |
 | ⑤ | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
 | ⑥ | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
 
-**작성 예시**:
+**작성 예시 — 서비스 유형별 3가지** (주석의 ①~⑥은 위 표의 항목 번호):
+
+*유형 1 — LLM API만 쓰는 서비스 (자체 GPU 없음)*: 사내 플랫폼과 외부 API를 호출하는 챗봇
 
 ```yaml
-serviceGroup: claude                                     # ①
-service: claude-cowork                                   # ①
-owner: kim@company.com                                   # ①
-models:                                                  # ②
-  - { canonical: opus, family: claude, sizeClass: L, aliases: ["anthropic/claude-opus", "opus-fp8"] }
-gpuAllocationUnit: "k8s-ns:claude-cowork-prod"           # ③ GPU 대시보드에서 우리 서비스의 할당 단위 (유형:식별자) — 할당량 조회 키
-consumes: []                                             # ④ 예: [{ platform: llm-gateway, model: llama3.3-70b }]
-serviceAccounts: {}                                      # ⑤ 예: { svc-key-a1: chat-assistant }
-metricsUrl: "http://cowork-vllm.internal:8000/metrics"   # ⑥
-engine: { type: vllm }                                   # ⑥ 버전은 API 자기신고로 수신 — 수기 갱신 불필요
+serviceGroup: hr                              # ①
+service: hr-chatbot                           # ①
+owner: park@company.com                       # ①
+models:                                       # ② 직접 호출하는 외부 API 모델만 등재
+  - { canonical: gpt-4o, family: gpt-4o, sizeClass: L, aliases: ["gpt-4o-2024-11-20", "gpt-4o-2025-03-26"] }
+gpuAllocationUnit: null                       # ③ GPU 할당 없음
+consumes:                                     # ④ 사내 플랫폼 사용분 — 플랫폼의 모델은 그 플랫폼이 등재하므로 여기엔 관계만
+  - { platform: llm-gateway, model: llama3.3-70b }
+serviceAccounts: {}                           # ⑤ 플랫폼 제공자가 아니므로 비움
+metricsUrl: null                              # ⑥ 스크랩 대상 없음 (§4 케이스 E)
+engine: null
 ```
+
+*유형 2 — GPU 할당 받은 자체 AI 서비스*: vLLM으로 자체 서빙하는 DS Assistant
+
+```yaml
+serviceGroup: ds                              # ①
+service: ds-assistant                         # ①
+owner: kim@company.com                        # ①
+models:                                       # ② 위 "작성 과정 예시"의 결과 그대로
+  - canonical: llama3.3-70b
+    family: llama3.3
+    sizeClass: L
+    aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
+gpuAllocationUnit: "k8s-ns:ds-assistant-prod" # ③ GPU 대시보드에서 우리 서비스의 할당 단위 (유형:식별자) — 할당량 조회 키
+consumes: []                                  # ④ 사내 플랫폼 안 씀
+serviceAccounts: {}
+metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # ⑥ §4 케이스 A — 이것으로 serving 블록 생략
+engine: { type: vllm }                        # ⑥ 버전은 API 자기신고로 수신 — 수기 갱신 불필요
+```
+
+*유형 3 — GPU + LLM API 병행 (하이브리드)*: 일반 요청은 자체 GPU의 중형 모델, 대형 요청은 사내 플랫폼으로
+
+```yaml
+serviceGroup: search                          # ①
+service: doc-summary                          # ①
+owner: lee@company.com                        # ①
+models:                                       # ② 자체 GPU로 서빙하는 모델만 등재
+  - { canonical: qwen3-32b, family: qwen3, sizeClass: M, aliases: ["Qwen/Qwen3-32B"] }
+gpuAllocationUnit: "k8s-ns:doc-summary-prod"  # ③ 자체 GPU 할당분
+consumes:                                     # ④ 플랫폼 사용분 — gpu 블록에는 쓰지 않음 (§3)
+  - { platform: llm-gateway, model: llama3.3-70b }
+serviceAccounts: {}
+metricsUrl: null                              # ⑥ 자체 구현 서빙 (§4 케이스 D) — serving 블록 직접 채움
+engine: { type: custom }
+```
+
+- 플랫폼 **제공자**라면 ⑤를 채운다 — 예: `serviceAccounts: { svc-key-a1: hr-chatbot }` (발급한 API 키 ↔ 소비 서비스)
 
 **모델 표기(②) 작성법**
 
@@ -126,13 +165,13 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 ```json
 {
   "date": "2026-08-18",
-  "serviceGroup": "claude",
-  "service": "claude-cowork",
+  "serviceGroup": "ds",
+  "service": "ds-assistant",
   "generatedAt": "2026-08-19T01:30:00+09:00",
   "engine": { "type": "vllm", "version": "0.8.4" },
   "gpu": [
-    { "model": "opus", "gpuType": "H100", "gpuCount": 4, "gpuHours": 96.0, "category": "serving" },
-    { "model": "opus", "gpuType": "H100", "gpuCount": 1, "gpuHours": 24.0, "category": "standby" }
+    { "model": "llama3.3-70b", "gpuType": "H100", "gpuCount": 4, "gpuHours": 96.0, "category": "serving" },
+    { "model": "llama3.3-70b", "gpuType": "H100", "gpuCount": 1, "gpuHours": 24.0, "category": "standby" }
   ],
   "serving": []
 }
@@ -204,7 +243,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 
 | 상황 | gpu 블록에 이렇게 쓴다 |
 |---|---|
-| **기본**: H100 4장으로 opus를 하루 종일 서빙 | `{ "model": "opus", "gpuType": "H100", "gpuCount": 4, "gpuHours": 96.0, "category": "serving" }` |
+| **기본**: H100 4장으로 llama3.3-70b를 하루 종일 서빙 | `{ "model": "llama3.3-70b", "gpuType": "H100", "gpuCount": 4, "gpuHours": 96.0, "category": "serving" }` |
 | + HA 대기 1장 | 행 추가: `{ ..., "gpuCount": 1, "gpuHours": 24.0, "category": "standby" }` |
 | + 실험용 A100 2장 (모델 유동적) | 행 추가: `{ "model": "unknown", "gpuType": "A100", "gpuCount": 2, "gpuHours": 48.0, "category": "test" }` |
 | 낮에 증설: 2장 12h → 4장 12h | **한 행**: `gpuCount: 4, gpuHours: 72.0` (= 2×12 + 4×12) |
