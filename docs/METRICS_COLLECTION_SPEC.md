@@ -18,6 +18,10 @@
 - 중앙이 매일 새벽 pull 호출한다 — 서비스는 상태 없는 GET만 제공 (크론·재시도·장애 감지는 중앙 책임).
 - 토큰량·requests는 보내지 않는다 — 기존 토큰 API 담당 (이중 소스 금지).
 
+> **전제 — "기존 토큰 API"란?** 각 서비스가 일별 **토큰 사용량·요청 수**를 제공하는 사내 표준 GET `/v1/usage` 엔드포인트다 (스펙: [token-usage-api-spec](https://github.com/YoonsungNam/token-usage-api-spec)). 본 문서의 `/v1/metrics`는 그 **자매 API**로, 호출 방식(pull)·식별자·응답 규칙을 그대로 따른다.
+>
+> **`/v1/usage`를 아직 구현하지 않은 신규 서비스라면**: 두 API를 함께 온보딩한다 — ① token-usage-api-spec대로 `/v1/usage` 구현 (토큰·requests) ② 본 스펙대로 `/v1/metrics` 구현 (GPU·성능). 이때 두 API가 **같은 (serviceGroup, service, model) 표기**를 써야 한다 — 이 일치가 토큰↔GPU↔성능 데이터를 잇는(JOIN) 조건이므로, §1의 취합본에 표기를 먼저 확정하고 두 API에 동일하게 적용하면 된다.
+
 ---
 
 ## 1. 취합본(엑셀) 제출
