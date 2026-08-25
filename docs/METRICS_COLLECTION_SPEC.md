@@ -29,7 +29,7 @@
 | ① | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`claude` ≠ `Claude`) |
 | ② | 모델 표기 | canonical + alias 목록 + family + 체급(sizeClass: S ~15B / M ~40B / L 40B+) |
 | ③ | GPU 할당 매핑 | GPU 대시보드 할당 단위(프로젝트/네임스페이스 등) ↔ service |
-| ④ | 소비 관계 | "우리 서비스 → 어느 플랫폼의 어느 모델" (사내 플랫폼 사용 시) |
+| ④ | 소비 관계 | "우리 서비스 → 어느 플랫폼의 어느 모델" — 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API)을 쓰는 경우만 |
 | ⑤ | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
 | ⑥ | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
 
@@ -48,7 +48,28 @@ metricsUrl: "http://cowork-vllm.internal:8000/metrics"   # ⑥
 engine: { type: vllm }                                   # ⑥ 버전은 API 자기신고로 수신 — 수기 갱신 불필요
 ```
 
-**모델 표기(②) 작성법 — 상황별 예시**:
+**모델 표기(②) 작성법**
+
+먼저 용어 4개 — 항목 ②의 각 필드가 하는 일:
+
+| 필드 | 뜻 | 역할 |
+|---|---|---|
+| `canonical` | 이 모델의 **공식 이름** (이번에 새로 정하는 것) | 대시보드에 표시되는 유일한 표기 — 모든 데이터가 이 이름으로 모여 집계된다 |
+| `aliases` | 실데이터에 등장하는 이 모델의 **다른 이름 전부** — HF 경로, served-model-name, 기존 토큰 API에 보내던 문자열, 외부 API 날짜 버전 등 | 중앙이 데이터에서 이 표기들을 만나면 canonical로 바꿔 집계한다. **여기 안 적힌 표기는 "미등록"으로 빠져 알림이 온다** |
+| `family` | 변형들을 묶는 **상위 그룹명** | 대시보드에서 합쳐 보기(rollup)용 — 예: `llama3.3-70b`(순정)·`llama3.3-70b-awq`(양자화)·`llama3.3-70b-ft-cs`(파인튜닝)를 `llama3.3`으로 묶어 봄 |
+| `sizeClass` | 모델 **체급**: S(~15B) / M(~40B) / L(40B+) — MoE는 활성 파라미터 기준 | 효율 비교·랭킹을 같은 체급끼리만 하기 위한 분류 |
+
+작성 과정 예시 — *"HF에서 받은 Llama-3.3-70B를 vLLM으로 서빙 중. 기존 토큰 API에는 `llama70b`로 보내왔고, vLLM `--served-model-name`은 `/models/llama33`"* 인 팀이라면:
+
+```yaml
+- canonical: llama3.3-70b        # 공식 이름을 표기 형식에 맞게 새로 정함
+  family: llama3.3
+  sizeClass: L                   # 70B → L
+  aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
+  # ↑ 순서대로: HF 경로 · 기존 토큰 API 표기 · served-model-name — 어디서든 쓰던 이름을 전부 나열
+```
+
+**상황별 예시**:
 
 | 상황 | 이렇게 쓴다 |
 |---|---|
