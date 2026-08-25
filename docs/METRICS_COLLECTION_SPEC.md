@@ -13,7 +13,7 @@
 | **모든 서비스** | ① 메타데이터 시트(엑셀) 제출 (§1) | 온보딩 시 1회 |
 | **모든 서비스** | ② GET `/v1/metrics` 구현 — gpu 블록 (§2~3) | **~9/18** |
 | vLLM / SGLang 팀 | ③ `/metrics` URL 제출 + 네트워크 개방 — **이러면 끝** (serving 블록 불필요) | 온보딩 시 |
-| 자체 구현 서빙 / 외부 API 팀 | ③′ serving 블록 자체 집계 (§4) | ~9/18 |
+| 자체 구현 서빙 / 사외 AI 모델 API 팀 | ③′ serving 블록 자체 집계 (§4) | ~9/18 |
 
 **역할 표기** — 이 문서는 두 역할로 구분해 쓴다:
 
@@ -40,25 +40,30 @@
 | # | 항목 | 내용 |
 |---|---|---|
 | ① | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`ds-assistant` ≠ `DS-Assistant`) |
-| ② | 모델 표기 | canonical + alias 목록 + family + 체급(sizeClass: S ~15B / M ~40B / L 40B+) |
+| ② | 모델 표기 | 서비스가 **사용하는 모든 모델** — 자체 서빙, 사내 플랫폼 경유, 사외 AI 모델 API 직접 호출 전부. canonical 정의(alias·family·sizeClass)는 **서빙 주체가 등재** — 사내 플랫폼 경유 모델은 이름만 참조로 적는다 |
 | ③ | GPU 할당 매핑 | 운영자가 GPU 대시보드에서 이 서비스의 **할당량(고정 쿼터)을 조회할 때 쓰는 키** — 우리 GPU가 배정된 할당 단위(k8s 네임스페이스·프로젝트명 등)를 적는다. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
-| ④ | 소비 관계 | "우리 서비스 → 어느 플랫폼의 어느 모델" — 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API)을 쓰는 경우만 |
+| ④ | 소비 관계 (consumes) | **models 중 외부에서 조달하는 모델의 출처** — 어떤 모델을 어떤 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API) / 사외 AI 모델 API에서 쓰는지. **consumes에 없는 모델 = 자체 GPU 서빙** |
 | ⑤ | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
 | ⑥ | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
 
 **작성 예시 — 서비스 유형별 3가지** (주석의 ①~⑥은 위 표의 항목 번호):
 
-*유형 1 — LLM API만 쓰는 서비스 (자체 GPU 없음)*: 사내 플랫폼과 외부 API를 호출하는 챗봇
+*유형 1 — LLM API만 쓰는 서비스 (자체 GPU 없음)*: 사내 플랫폼과 사외 AI 모델 API를 호출하는 챗봇
 
 ```yaml
 serviceGroup: hr                              # ①
 service: hr-chatbot                           # ①
 owner: park@company.com                       # ①
-models:                                       # ② 직접 호출하는 외부 API 모델만 등재
-  - { canonical: gpt-4o, family: gpt-4o, sizeClass: L, aliases: ["gpt-4o-2024-11-20", "gpt-4o-2025-03-26"] }
+models:                                       # ② 쓰는 모델 전부
+  - canonical: claude-sonnet-4.5              #    사외 AI 모델 API 직접 호출 — canonical 정의 주체는 우리
+    family: claude
+    sizeClass: null                           #    사외 모델은 파라미터 비공개 — 생략 가능
+    aliases: ["claude-sonnet-4-5-20250929", "claude-sonnet-4-5"]
+  - { canonical: llama3.3-70b }               #    사내 플랫폼 경유 — 정의는 플랫폼이 등재, 이름만 참조
 gpuAllocationUnit: null                       # ③ GPU 할당 없음
-consumes:                                     # ④ 사내 플랫폼 사용분 — 플랫폼의 모델은 그 플랫폼이 등재하므로 여기엔 관계만
-  - { platform: llm-gateway, model: llama3.3-70b }
+consumes:                                     # ④ models 중 외부 조달 모델의 출처 — 없는 모델 = 자체 서빙
+  - { model: claude-sonnet-4.5, provider: anthropic-api, type: 사외 }
+  - { model: llama3.3-70b, provider: llm-gateway, type: 사내 }
 serviceAccounts: {}                           # ⑤ 플랫폼 제공자가 아니므로 비움
 metricsUrl: null                              # ⑥ 스크랩 대상 없음 (§4 케이스 E)
 engine: null
@@ -76,7 +81,7 @@ models:                                       # ② 위 "작성 과정 예시"�
     sizeClass: L
     aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
 gpuAllocationUnit: "k8s-ns:ds-assistant-prod" # ③ GPU 대시보드에서 우리 서비스의 할당 단위 (유형:식별자) — 할당량 조회 키
-consumes: []                                  # ④ 사내 플랫폼 안 씀
+consumes: []                                  # ④ 비어 있음 = 전 모델 자체 서빙
 serviceAccounts: {}
 metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # ⑥ §4 케이스 A — 이것으로 serving 블록 생략
 engine: { type: vllm }                        # ⑥ 버전은 API 자기신고로 수신 — 수기 갱신 불필요
@@ -88,11 +93,12 @@ engine: { type: vllm }                        # ⑥ 버전은 API 자기신고�
 serviceGroup: search                          # ①
 service: doc-summary                          # ①
 owner: lee@company.com                        # ①
-models:                                       # ② 자체 GPU로 서빙하는 모델만 등재
-  - { canonical: qwen3-32b, family: qwen3, sizeClass: M, aliases: ["Qwen/Qwen3-32B"] }
+models:                                       # ② 쓰는 모델 전부
+  - { canonical: qwen3-32b, family: qwen3, sizeClass: M, aliases: ["Qwen/Qwen3-32B"] }   # 자체 서빙
+  - { canonical: llama3.3-70b }               #    사내 플랫폼 경유 — 이름만 참조
 gpuAllocationUnit: "k8s-ns:doc-summary-prod"  # ③ 자체 GPU 할당분
-consumes:                                     # ④ 플랫폼 사용분 — gpu 블록에는 쓰지 않음 (§3)
-  - { platform: llm-gateway, model: llama3.3-70b }
+consumes:                                     # ④ llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
+  - { model: llama3.3-70b, provider: llm-gateway, type: 사내 }
 serviceAccounts: {}
 metricsUrl: null                              # ⑥ 자체 구현 서빙 (§4 케이스 D) — serving 블록 직접 채움
 engine: { type: custom }
@@ -107,7 +113,7 @@ engine: { type: custom }
 | 필드 | 뜻 | 역할 |
 |---|---|---|
 | `canonical` | 이 모델의 **공식 이름** (이번에 새로 정하는 것) | 대시보드에 표시되는 유일한 표기 — 모든 데이터가 이 이름으로 모여 집계된다 |
-| `aliases` | 실데이터에 등장하는 이 모델의 **다른 이름 전부** — HF 경로, served-model-name, 기존 토큰 API에 보내던 문자열, 외부 API 날짜 버전 등 | 운영자가 데이터에서 이 표기들을 만나면 canonical로 바꿔 집계한다. **여기 안 적힌 표기는 "미등록"으로 빠져 알림이 온다** |
+| `aliases` | 실데이터에 등장하는 이 모델의 **다른 이름 전부** — HF 경로, served-model-name, 기존 토큰 API에 보내던 문자열, 사외 AI 모델 API의 날짜 버전 등 | 운영자가 데이터에서 이 표기들을 만나면 canonical로 바꿔 집계한다. **여기 안 적힌 표기는 "미등록"으로 빠져 알림이 온다** |
 | `family` | 변형들을 묶는 **상위 그룹명** | 대시보드에서 합쳐 보기(rollup)용 — 예: `llama3.3-70b`(순정)·`llama3.3-70b-awq`(양자화)·`llama3.3-70b-ft-cs`(파인튜닝)를 `llama3.3`으로 묶어 봄 |
 | `sizeClass` | 모델 **체급**: S(~15B) / M(~40B) / L(40B+) — MoE는 활성 파라미터 기준 | 효율 비교·랭킹을 같은 체급끼리만 하기 위한 분류 |
 
@@ -128,7 +134,7 @@ engine: { type: custom }
 | 팀마다 부르는 이름이 다름 — `meta-llama/Llama-3.3-70B-Instruct`와 `/models/llama33-70b` (같은 순정 모델) | canonical `llama3.3-70b` **하나** + 두 표기를 aliases에 |
 | 사내 파인튜닝본 운영 | **반드시 별도** canonical: `llama3.3-70b-ft-cs` — 순정과 같은 id 금지 |
 | AWQ/FP8 양자화 배포 | 별도 canonical: `llama3.3-70b-awq` |
-| 외부 API 날짜 버전 (`gpt-4o-2024-11-20`) | canonical `gpt-4o` + 날짜 문자열은 alias |
+| 사외 AI 모델 API의 날짜 버전 (`claude-sonnet-4-5-20250929`) | canonical `claude-sonnet-4.5` + 날짜 문자열은 alias |
 | 같은 모델인지 애매함 | **나눈다** — 나눈 건 나중에 합쳐 볼 수 있지만, 합친 건 못 나눔 |
 
 - 형식: 소문자·하이픈 `{패밀리}{버전}-{크기}[-{변형}]`. 판단 기준: ①같은 웨이트 ②순정 ③같은 정밀도 — 셋 다 "예"일 때만 같은 canonical.
@@ -200,7 +206,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 }
 ```
 
-**응답 예시 3 — 외부 API 연동 (케이스 E): gpu 빈 배열**
+**응답 예시 3 — 사외 AI 모델 API 연동 (케이스 E): gpu 빈 배열**
 
 ```json
 {
@@ -210,7 +216,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
   "generatedAt": "2026-08-19T01:05:00+09:00",
   "gpu": [],
   "serving": [
-    { "model": "gpt-4o", "ttftMs": { "p50": 850, "p90": 1600, "p99": 3200 }, "itlMs": { "p50": 22, "p90": 38, "p99": 80 } }
+    { "model": "claude-sonnet-4.5", "ttftMs": { "p50": 850, "p90": 1600, "p99": 3200 }, "itlMs": { "p50": 22, "p90": 38, "p99": 80 } }
   ]
 }
 ```
@@ -249,8 +255,8 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | 낮에 증설: 2장 12h → 4장 12h | **한 행**: `gpuCount: 4, gpuHours: 72.0` (= 2×12 + 4×12) |
 | 기종 이전: A100 4장 10h → H100 4장 14h | **두 행**: A100 `gpuHours: 40.0` + H100 `gpuHours: 56.0` |
 | 주간 모델 X 12h + 야간 모델 Y 12h (같은 GPU 4장) | **두 행**: X `gpuHours: 48.0` + Y `gpuHours: 48.0` (gpuCount 각 4) |
-| 다른 사내 플랫폼 API 사용분 | **행을 쓰지 않음** — GPU는 플랫폼이 보고. 메타데이터 시트 ④에 소비 관계만 등록 |
-| 사내 GPU 없음 (외부 API만) | `"gpu": []` |
+| 다른 사내 플랫폼 API 사용분 | **행을 쓰지 않음** — GPU는 플랫폼이 보고. 메타데이터 시트 ④(consumes)에 출처만 등록 |
+| 사내 GPU 없음 (사외 AI 모델 API만) | `"gpu": []` |
 
 **하지 말 것**:
 
@@ -278,7 +284,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | B. SGLang | 상동 (`--enable-metrics` 필요할 수 있음) | 생략 |
 | C. 기타 Prometheus 엔진 (TGI 등) | 상동 + TTFT/ITL 메트릭명 매핑을 운영자와 확정 | 생략 |
 | D. 자체 구현 서빙 | 아래 측정 예시대로 로깅·집계 → GET 제공 | 채움 |
-| E. 외부 API 연동 | `gpu: []`. 원하면 게이트웨이에서 측정 (측정 위치를 메타데이터 시트에 명시) | 선택 |
+| E. 사외 AI 모델 API 연동 | `gpu: []`. 원하면 게이트웨이에서 측정 (측정 위치를 메타데이터 시트에 명시) | 선택 |
 | F. 비스트리밍 | TTFT/ITL 해당 없음 | 생략 |
 
 **케이스 D 측정 예시** — 스트리밍 응답 코드에 시각 3종을 로깅:
@@ -314,4 +320,4 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 - [ ] (케이스 D) 시각 3종 로깅 + 레플리카 통합 집계 가능한가?
 - [ ] `/v1/metrics`를 02:00 이전에 전일 확정 상태로 제공 가능한가?
 - [ ] (플랫폼 제공자) 소비 서비스별 API 키 발급 + 계정↔서비스 매핑 제출했는가?
-- [ ] (플랫폼 소비자) 소비 관계 제출 + 그 사용분의 GPU·토큰을 보내지 않는다는 것을 인지했는가?
+- [ ] (사내 플랫폼 소비자) consumes(모델 출처) 제출 + 그 사용분의 GPU·토큰을 보내지 않는다는 것을 인지했는가?
