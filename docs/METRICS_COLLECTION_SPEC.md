@@ -64,10 +64,10 @@ gpuAllocationUnit: null                       # [3] GPU 할당 없음
 consumes:                                     # [4] models 중 외부 조달 모델의 출처 — 없는 모델 = 자체 서빙
   - model: claude-sonnet-4.5
     provider: anthropic-api
-    type: 사외
+    type: external                            #    external = 사외 AI 모델 API
   - model: llama3.3-70b
     provider: llm-gateway
-    type: 사내
+    type: internal                            #    internal = 사내 플랫폼
 serviceAccounts: {}                           # [5] 플랫폼 제공자가 아니므로 비움
 metricsUrl: null                              # [6] 스크랩 대상 없음 (§4 케이스 E)
 engine: null
@@ -108,7 +108,7 @@ gpuAllocationUnit: "k8s-ns:doc-summary-prod"  # [3] 자체 GPU 할당분
 consumes:                                     # [4] llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
   - model: llama3.3-70b
     provider: llm-gateway
-    type: 사내
+    type: internal
 serviceAccounts: {}
 metricsUrl: null                              # [6] 자체 구현 서빙 (§4 케이스 D) — serving 블록 직접 채움
 engine:
