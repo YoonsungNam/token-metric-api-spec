@@ -41,7 +41,7 @@
 |---|---|---|
 | ① | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`claude` ≠ `Claude`) |
 | ② | 모델 표기 | canonical + alias 목록 + family + 체급(sizeClass: S ~15B / M ~40B / L 40B+) |
-| ③ | GPU 할당 매핑 | GPU 대시보드 할당 단위(프로젝트/네임스페이스 등) ↔ service |
+| ③ | GPU 할당 매핑 | 운영자가 GPU 대시보드에서 이 서비스의 **할당량(고정 쿼터)을 조회할 때 쓰는 키** — 우리 GPU가 배정된 할당 단위(k8s 네임스페이스·프로젝트명 등)를 적는다. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
 | ④ | 소비 관계 | "우리 서비스 → 어느 플랫폼의 어느 모델" — 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API)을 쓰는 경우만 |
 | ⑤ | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
 | ⑥ | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
@@ -54,7 +54,7 @@ service: claude-cowork                                   # ①
 owner: kim@company.com                                   # ①
 models:                                                  # ②
   - { canonical: opus, family: claude, sizeClass: L, aliases: ["anthropic/claude-opus", "opus-fp8"] }
-gpuAllocationUnit: "k8s-ns:claude-cowork-prod"           # ③
+gpuAllocationUnit: "k8s-ns:claude-cowork-prod"           # ③ GPU 대시보드에서 우리 서비스의 할당 단위 (유형:식별자) — 할당량 조회 키
 consumes: []                                             # ④ 예: [{ platform: llm-gateway, model: llama3.3-70b }]
 serviceAccounts: {}                                      # ⑤ 예: { svc-key-a1: chat-assistant }
 metricsUrl: "http://cowork-vllm.internal:8000/metrics"   # ⑥
