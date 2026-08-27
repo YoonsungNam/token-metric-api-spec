@@ -121,24 +121,24 @@ engine:
 
 **시트 필드 정의**:
 
-| 필드 | 타입 | 필수 | 정의 |
-|---|---|---|---|
-| `serviceGroup` | string | O | 서비스가 속한 그룹/과제 표기 — 기존 토큰 API와 동일 문자열 |
-| `service` | string | O | 수집·제공 단위인 서비스 표기 — 기존 토큰 API와 동일 문자열 |
-| `owner` | string (email) | O | 담당자 연락처 — 운영자 알림의 수신 주소 |
-| `models[]` | array | O | 서비스가 사용하는 **모든** 모델 (자체 서빙 + 사내 플랫폼 경유 + 사외 AI 모델 API) |
-| `models[].canonical` | string | O | 모델 공식 이름. **정의 주체**(자체 서빙·사외 직접 호출)는 아래 3개 필드까지 작성, 사내 플랫폼 경유 모델은 이 필드만 (이름 참조) |
-| `models[].family` | string | 정의 주체만 | 변형(순정·양자화·파인튜닝)을 묶는 상위 그룹명 — rollup용 |
-| `models[].sizeClass` | `S`/`M`/`L`/null | 정의 주체만 | 체급 (S ~15B / M ~40B / L 40B+, MoE는 활성 파라미터) — 파라미터 비공개 사외 모델은 null |
-| `models[].aliases` | string[] | 정의 주체만 | 실데이터에 등장하는 다른 표기 전부 — 운영자 정규화의 사전 |
-| `gpuDashboardUnit` | string / null | O | GPU 대시보드의 할당 unit 키, `인프라유형:워크그룹:unit이름` — GPU 할당 없으면 null |
-| `consumes[]` | array | O (없으면 `[]`) | models 중 **외부 조달 모델의 출처** — 여기 없는 모델 = 자체 GPU 서빙 |
-| `consumes[].model` | string | O | models에 등재된 canonical |
-| `consumes[].provider` | string | O | 조달처 — 사내 플랫폼이면 그 서비스의 `service` 표기(예: `ds-assistant`), 사외면 API 제공사 표기(예: `anthropic-api`) |
-| `consumes[].type` | `internal`/`external` | O | internal = 사내 플랫폼, external = 사외 AI 모델 API |
-| `serviceAccounts` | object / `{}` | 플랫폼 제공자만 | 발급한 API 키(서비스 계정) ↔ 소비 서비스 매핑 — 소비자 식별의 근거 |
-| `metricsUrl` | string / null | 케이스 A~C만 | 운영자측 Prometheus가 스크랩할 `/metrics` URL |
-| `engine` | object {type} / null | 권장 | 추론 엔진 종류 (`vllm`/`sglang`/`custom` 등) — 버전은 API 자기신고로 수신 |
+| 필드 | 타입 | 필수 | 정의 | 예시 |
+|---|---|---|---|---|
+| `serviceGroup` | string | O | 서비스가 속한 그룹/과제 표기 — 기존 토큰 API와 동일 문자열 | `ds` |
+| `service` | string | O | 수집·제공 단위인 서비스 표기 — 기존 토큰 API와 동일 문자열 | `ds-assistant` |
+| `owner` | string (email) | O | 담당자 연락처 — 운영자 알림의 수신 주소 | `kim@samsung.com` |
+| `models[]` | array | O | 서비스가 사용하는 **모든** 모델 (자체 서빙 + 사내 플랫폼 경유 + 사외 AI 모델 API) | 유형 1~3 예시 참조 |
+| `models[].canonical` | string | O | 모델 공식 이름. **정의 주체**(자체 서빙·사외 직접 호출)는 아래 3개 필드까지 작성, 사내 플랫폼 경유 모델은 이 필드만 (이름 참조) | `llama3.3-70b` |
+| `models[].family` | string | 정의 주체만 | 변형(순정·양자화·파인튜닝)을 묶는 상위 그룹명 — rollup용 | `llama3.3` |
+| `models[].sizeClass` | `S`/`M`/`L`/null | 정의 주체만 | 체급 (S ~15B / M ~40B / L 40B+, MoE는 활성 파라미터) — 파라미터 비공개 사외 모델은 null | `L` |
+| `models[].aliases` | string[] | 정의 주체만 | 실데이터에 등장하는 다른 표기 전부 — 운영자 정규화의 사전 | `["meta-llama/Llama-3.3-70B-Instruct", "llama70b"]` |
+| `gpuDashboardUnit` | string / null | O | GPU 대시보드의 할당 unit 키, `인프라유형:워크그룹:unit이름` — GPU 할당 없으면 null | `ai-platform:ds-assistant:dsllm-model-high` |
+| `consumes[]` | array | O (없으면 `[]`) | models 중 **외부 조달 모델의 출처** — 여기 없는 모델 = 자체 GPU 서빙 | 유형 1·3 예시 참조 |
+| `consumes[].model` | string | O | models에 등재된 canonical | `llama3.3-70b` |
+| `consumes[].provider` | string | O | 조달처 — 사내 플랫폼이면 그 서비스의 `service` 표기, 사외면 API 제공사 표기 | `ds-assistant` (사내) / `anthropic-api` (사외) |
+| `consumes[].type` | `internal`/`external` | O | internal = 사내 플랫폼, external = 사외 AI 모델 API | `internal` |
+| `serviceAccounts` | object / `{}` | 플랫폼 제공자만 | 발급한 API 키(서비스 계정) ↔ 소비 서비스 매핑 — 소비자 식별의 근거 | `svc-key-a1: hr-chatbot` |
+| `metricsUrl` | string / null | 케이스 A~C만 | 운영자측 Prometheus가 스크랩할 `/metrics` URL | `http://ds-assistant-vllm.internal:8000/metrics` |
+| `engine` | object {type} / null | 권장 | 추론 엔진 종류 (`vllm`/`sglang`/`custom` 등) — 버전은 API 자기신고로 수신 | `type: vllm` |
 
 **모델 표기([2]) 작성법**
 
