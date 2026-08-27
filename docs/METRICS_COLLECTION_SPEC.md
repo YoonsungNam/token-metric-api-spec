@@ -66,7 +66,7 @@ consumes:                                     # [4] models 중 외부 조달 모
     provider: anthropic-api
     type: external                            #    external = 사외 AI 모델 API
   - model: llama3.3-70b
-    provider: ds-assistant
+    provider: ds-assistant-portal
     type: internal                            #    internal = 사내 플랫폼
 serviceAccounts: {}                           # [5] 플랫폼 제공자가 아니므로 비움
 metricsUrl: null                              # [6] 스크랩 대상 없음 (§4 케이스 E)
@@ -76,8 +76,8 @@ engine: null
 *유형 2 — GPU 할당 받은 자체 AI 서비스 (겸 사내 플랫폼 제공자)*: vLLM으로 자체 서빙하며, 유형 1·3이 소비하는 LLM API를 제공하는 DS Assistant
 
 ```yaml
-serviceGroup: ds                              # [1]
-service: ds-assistant                         # [1]
+serviceGroup: ds-assistant                    # [1]
+service: ds-assistant-portal                  # [1]
 owner: kim@samsung.com                        # [1]
 models:                                       # [2] 위 "작성 과정 예시"의 결과 그대로
   - canonical: llama3.3-70b
@@ -109,7 +109,7 @@ models:                                       # [2] 쓰는 모델 전부
 gpuDashboardUnit: "ds-cloud:search-team:doc-summary-prod"   # [3] 자체 GPU 할당분
 consumes:                                     # [4] llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
   - model: llama3.3-70b
-    provider: ds-assistant
+    provider: ds-assistant-portal
     type: internal
 serviceAccounts: {}
 metricsUrl: null                              # [6] 자체 구현 서빙 (§4 케이스 D) — serving 블록 직접 채움
@@ -123,8 +123,8 @@ engine:
 
 | 필드 | 타입 | 필수 | 정의 | 예시 |
 |---|---|---|---|---|
-| `serviceGroup` | string | O | 서비스가 속한 그룹/과제 표기 — 기존 토큰 API와 동일 문자열 | `ds` |
-| `service` | string | O | 수집·제공 단위인 서비스 표기 — 기존 토큰 API와 동일 문자열 | `ds-assistant` |
+| `serviceGroup` | string | O | 서비스가 속한 그룹/과제 표기 — 기존 토큰 API와 동일 문자열 | `ds-assistant` |
+| `service` | string | O | 수집·제공 단위인 서비스 표기 — 기존 토큰 API와 동일 문자열 | `ds-assistant-portal` |
 | `owner` | string (email) | O | 담당자 연락처 — 운영자 알림의 수신 주소 | `kim@samsung.com` |
 | `models[]` | array | O | 서비스가 사용하는 **모든** 모델 (자체 서빙 + 사내 플랫폼 경유 + 사외 AI 모델 API) | 유형 1~3 예시 참조 |
 | `models[].canonical` | string | O | 모델 공식 이름. **정의 주체**(자체 서빙·사외 직접 호출)는 아래 3개 필드까지 작성, 사내 플랫폼 경유 모델은 이 필드만 (이름 참조) | `llama3.3-70b` |
@@ -134,7 +134,7 @@ engine:
 | `gpuDashboardUnit` | string / null | O | GPU 대시보드의 할당 unit 키, `인프라유형:워크그룹:unit이름` — GPU 할당 없으면 null | `ai-platform:ds-assistant:dsllm-model-high` |
 | `consumes[]` | array | O (없으면 `[]`) | models 중 **외부 조달 모델의 출처** — 여기 없는 모델 = 자체 GPU 서빙 | 유형 1·3 예시 참조 |
 | `consumes[].model` | string | O | models에 등재된 canonical | `llama3.3-70b` |
-| `consumes[].provider` | string | O | 조달처 — 사내 플랫폼이면 그 서비스의 `service` 표기, 사외면 API 제공사 표기 | `ds-assistant` (사내) / `anthropic-api` (사외) |
+| `consumes[].provider` | string | O | 조달처 — 사내 플랫폼이면 그 서비스의 `service` 표기, 사외면 API 제공사 표기 | `ds-assistant-portal` (사내) / `anthropic-api` (사외) |
 | `consumes[].type` | `internal`/`external` | O | internal = 사내 플랫폼, external = 사외 AI 모델 API | `internal` |
 | `serviceAccounts` | object / `{}` | 플랫폼 제공자만 | 발급한 API 키(서비스 계정) ↔ 소비 서비스 매핑 — 소비자 식별의 근거 | `svc-key-a1: hr-chatbot` |
 | `metricsUrl` | string / null | 케이스 A~C만 | 운영자측 Prometheus가 스크랩할 `/metrics` URL | `http://ds-assistant-vllm.internal:8000/metrics` |
@@ -205,8 +205,8 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 ```json
 {
   "date": "2026-08-18",
-  "serviceGroup": "ds",
-  "service": "ds-assistant",
+  "serviceGroup": "ds-assistant",
+  "service": "ds-assistant-portal",
   "generatedAt": "2026-08-19T01:30:00+09:00",
   "engine": { "type": "vllm", "version": "0.8.4" },
   "gpu": [
