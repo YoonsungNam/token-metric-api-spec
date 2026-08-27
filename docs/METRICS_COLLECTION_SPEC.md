@@ -40,7 +40,7 @@
 | # | 항목 | 내용 |
 |---|---|---|
 | [1] | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`ds-assistant` ≠ `DS-Assistant`) |
-| [2] | 모델 표기 | 서비스가 **사용하는 모든 모델** — 자체 서빙, 사내 플랫폼 경유, 사외 AI 모델 API 직접 호출 전부. canonical 정의(alias·family·sizeClass)는 **서빙 주체가 등재** — 사내 플랫폼 경유 모델은 이름만 참조로 적는다 |
+| [2] | 모델 표기 | 서비스가 **사용하는 모든 모델** — 자체 서빙, 사내 플랫폼 경유, 사외 AI 모델 API 직접 호출 전부. canonical 정의(alias·family·파라미터 수)는 **서빙 주체가 등재** — 사내 플랫폼 경유 모델은 이름만 참조로 적는다 |
 | [3] | GPU 할당 매핑 (`gpuDashboardUnit`) | **GPU 대시보드에서 우리 서비스의 할당 unit을 가리키는 키** — 운영자가 이 키로 할당량(고정 쿼터)을 조회한다. 포맷: `인프라유형:워크그룹:unit이름` (예: `ai-platform:ds-assistant:dsllm-model-high`) — GPU 대시보드에 표기된 그대로 적는다. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
 | [4] | 소비 관계 (consumes) | **models 중 외부에서 조달하는 모델의 출처** — 어떤 모델을 어떤 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API) / 사외 AI 모델 API에서 쓰는지. **consumes에 없는 모델 = 자체 GPU 서빙** |
 | [5] | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
@@ -57,7 +57,7 @@ owner: park@samsung.com                       # [1]
 models:                                       # [2] 쓰는 모델 전부
   - canonical: claude-sonnet-4.5              #    사외 AI 모델 API 직접 호출 — canonical 정의 주체는 우리
     family: claude
-    sizeClass: null                           #    사외 모델은 파라미터 비공개 — 생략 가능
+    paramsB: null                             #    사외 모델은 파라미터 비공개 — 생략 가능
     aliases: ["claude-sonnet-4-5-20250929", "claude-sonnet-4-5"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 정의는 플랫폼이 등재, 이름만 참조
 gpuDashboardUnit: null                        # [3] GPU 할당 없음
@@ -82,7 +82,7 @@ owner: kim@samsung.com                        # [1]
 models:                                       # [2] 위 "작성 과정 예시"의 결과 그대로
   - canonical: llama3.3-70b
     family: llama3.3
-    sizeClass: L
+    paramsB: 70
     aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
 gpuDashboardUnit: "ai-platform:ds-assistant:dsllm-model-high"   # [3] 인프라유형:워크그룹:unit이름 — GPU 대시보드의 할당 unit (할당량 조회 키)
 consumes: []                                  # [4] 비어 있음 = 전 모델 자체 서빙
@@ -103,7 +103,7 @@ owner: lee@samsung.com                        # [1]
 models:                                       # [2] 쓰는 모델 전부
   - canonical: qwen3-32b                      #    자체 서빙
     family: qwen3
-    sizeClass: M
+    paramsB: 32
     aliases: ["Qwen/Qwen3-32B"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 이름만 참조
 gpuDashboardUnit: "ds-cloud:search-team:doc-summary-prod"   # [3] 자체 GPU 할당분
@@ -129,7 +129,8 @@ engine:
 | `models[]` | array | O | 서비스가 사용하는 **모든** 모델 (자체 서빙 + 사내 플랫폼 경유 + 사외 AI 모델 API) | 유형 1~3 예시 참조 |
 | `models[].canonical` | string | O | 모델 공식 이름. **정의 주체**(자체 서빙·사외 직접 호출)는 아래 3개 필드까지 작성, 사내 플랫폼 경유 모델은 이 필드만 (이름 참조) | `llama3.3-70b` |
 | `models[].family` | string | 정의 주체만 | 변형(순정·양자화·파인튜닝)을 묶는 상위 그룹명 — rollup용 | `llama3.3` |
-| `models[].sizeClass` | `S`/`M`/`L`/null | 정의 주체만 | 체급 (S ~15B / M ~40B / L 40B+, MoE는 활성 파라미터) — 파라미터 비공개 사외 모델은 null | `L` |
+| `models[].paramsB` | number / null | 정의 주체만 | **총 파라미터 수 (단위: B)** — 메모리 점유(GPU 장수·비용)의 근거. 파라미터 비공개 사외 모델은 null | `70` |
+| `models[].activeParamsB` | number | MoE만 | MoE의 **활성 파라미터 수 (단위: B)** — 토큰당 연산량(속도)의 근거. dense 모델은 생략 | `22` |
 | `models[].aliases` | string[] | 정의 주체만 | 실데이터에 등장하는 다른 표기 전부 — 운영자 정규화의 사전 | `["meta-llama/Llama-3.3-70B-Instruct", "llama70b"]` |
 | `gpuDashboardUnit` | string / null | O | GPU 대시보드의 할당 unit 키, `인프라유형:워크그룹:unit이름` — GPU 할당 없으면 null | `ai-platform:ds-assistant:dsllm-model-high` |
 | `consumes[]` | array | O (없으면 `[]`) | models 중 **외부 조달 모델의 출처** — 여기 없는 모델 = 자체 GPU 서빙 | 유형 1·3 예시 참조 |
@@ -149,14 +150,14 @@ engine:
 | `canonical` | 이 모델의 **공식 이름** (이번에 새로 정하는 것) | 대시보드에 표시되는 유일한 표기 — 모든 데이터가 이 이름으로 모여 집계된다 |
 | `aliases` | 실데이터에 등장하는 이 모델의 **다른 이름 전부** — HF 경로, served-model-name, 기존 토큰 API에 보내던 문자열, 사외 AI 모델 API의 날짜 버전 등 | 운영자가 데이터에서 이 표기들을 만나면 canonical로 바꿔 집계한다. **여기 안 적힌 표기는 "미등록"으로 빠져 알림이 온다** |
 | `family` | 변형들을 묶는 **상위 그룹명** | 대시보드에서 합쳐 보기(rollup)용 — 예: `llama3.3-70b`(순정)·`llama3.3-70b-awq`(양자화)·`llama3.3-70b-ft-cs`(파인튜닝)를 `llama3.3`으로 묶어 봄 |
-| `sizeClass` | 모델 **체급**: S(~15B) / M(~40B) / L(40B+) — MoE는 활성 파라미터 기준 | 효율 비교·랭킹을 같은 체급끼리만 하기 위한 분류 |
+| `paramsB` (+`activeParamsB`) | 모델 크기 — **총 파라미터 수(B 단위)**, MoE는 활성 파라미터(`activeParamsB`)도 병기 | 효율 비교·랭킹의 체급(리그) 분류 근거 — **등급이 아닌 원시 값**을 받으므로, 분류 경계(S/M/L 등)는 운영자가 대시보드에서 파생·조정한다 |
 
 작성 과정 예시 — *"HF에서 받은 Llama-3.3-70B를 vLLM으로 서빙 중. 기존 토큰 API에는 `llama70b`로 보내왔고, vLLM `--served-model-name`은 `/models/llama33`"* 인 팀이라면:
 
 ```yaml
 - canonical: llama3.3-70b        # 공식 이름을 표기 형식에 맞게 새로 정함
   family: llama3.3
-  sizeClass: L                   # 70B → L
+  paramsB: 70                    # 총 파라미터 (B 단위) — MoE라면 activeParamsB(활성)도 병기
   aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
   # ↑ 순서대로: HF 경로 · 기존 토큰 API 표기 · served-model-name — 어디서든 쓰던 이름을 전부 나열
 ```
@@ -347,7 +348,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 
 - [ ] (serviceGroup, service, model) 공식 표기 확정 — 기존 토큰 API와 동일한가?
 - [ ] GPU 대시보드 할당 단위 확인 + service 매핑을 메타데이터 시트에 제출했는가?
-- [ ] 모델 표기를 canonical + alias + sizeClass로 정리해 제출했는가? 파인튜닝은 `-ft-{용도}`로 분리했는가?
+- [ ] 모델 표기를 canonical + alias + 파라미터 수(paramsB, MoE는 activeParamsB 포함)로 정리해 제출했는가? 파인튜닝은 `-ft-{용도}`로 분리했는가?
 - [ ] gpu 블록을 §3 상황별 예시대로 작성 가능한가? (serving·standby는 `unknown` 금지)
 - [ ] 추론 엔진 확인 → §4 케이스 판별 + 응답에 `engine` 자기신고 포함하는가?
 - [ ] (케이스 A~C) `/metrics` URL 제출 + 운영자측 Prometheus 접근 개방 가능한가?
