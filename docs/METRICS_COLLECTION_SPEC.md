@@ -86,6 +86,7 @@ models:                                       # [2] 위 "작성 과정 예시"�
     aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
 gpuDashboardUnits:                            # [3] 할당 unit 프리픽스 목록 — 프리픽스 아래 unit 자동 포함
   - "ai-platform:ds-assistant"                #     워크그룹 수준 (권장): dsllm-model-high 등 하위 unit 전부 포함
+  - "ds-cloud:ds-assistant-batch"             #     워크그룹이 여러 개면 나열 — 인프라유형이 달라도 됨
 consumes: []                                  # [4] 비어 있음 = 전 모델 자체 서빙
 serviceAccounts:                              # [5] 플랫폼 제공자만 — 발급한 API 키 ↔ 소비 서비스
   svc-key-a1: hr-chatbot
@@ -107,8 +108,8 @@ models:                                       # [2] 쓰는 모델 전부
     paramsB: 32
     aliases: ["Qwen/Qwen3-32B"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 이름만 참조
-gpuDashboardUnits:                            # [3] 워크그룹(search-team)을 타 서비스와 공유 → unit 수준까지 지정
-  - "ds-cloud:search-team:doc-summary-prod"
+gpuDashboardUnits:                            # [3] 공유 워크그룹: search-team 안에 타 서비스(search-ranker 등)의
+  - "ds-cloud:search-team:doc-summary-prod"   #     unit도 있음 → 워크그룹 수준으로 적으면 남의 unit까지 삼키므로 우리 unit만 지정
 consumes:                                     # [4] llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
   - model: llama3.3-70b
     provider: ds-assistant-portal
