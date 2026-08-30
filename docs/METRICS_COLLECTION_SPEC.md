@@ -41,7 +41,7 @@
 |---|---|---|
 | [1] | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`ds-assistant` ≠ `DS-Assistant`) |
 | [2] | 모델 표기 | 서비스가 **사용하는 모든 모델** — 자체 서빙, 사내 플랫폼 경유, 사외 AI 모델 API 직접 호출 전부. canonical 정의(alias·family·파라미터 수)는 **서빙 주체가 등재** — 사내 플랫폼 경유 모델은 이름만 참조로 적는다 |
-| [3] | GPU 할당 매핑 (`gpuDashboardUnit`) | **GPU 대시보드에서 우리 서비스의 할당 unit을 가리키는 키** — 운영자가 이 키로 할당량(고정 쿼터)을 조회한다. 포맷: `인프라유형:워크그룹:unit이름` (예: `ai-platform:ds-assistant:dsllm-model-high`) — GPU 대시보드에 표기된 그대로 적는다. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
+| [3] | GPU 할당 매핑 (`gpuDashboardUnits`) | **GPU 대시보드에서 우리 서비스의 할당 unit들을 가리키는 프리픽스 목록** — 운영자가 이걸로 할당량(고정 쿼터)을 조회한다. 계층 `인프라유형:워크그룹:unit이름`의 어느 수준에서든 끊어 적을 수 있고, **프리픽스 아래 모든 unit이 자동 포함**된다 (unit이 생기고 없어져도 시트 갱신 불필요). **워크그룹 수준 권장**(예: `ai-platform:ds-assistant`), 워크그룹을 타 서비스와 공유할 때만 unit 수준까지 지정. 프리픽스가 겹치면 긴(구체적) 쪽 우선, 같은 unit이 두 서비스에 매핑되면 검증 알림 — unit 하나는 결과적으로 service 하나에만 귀속. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
 | [4] | 소비 관계 (consumes) | **models 중 외부에서 조달하는 모델의 출처** — 어떤 모델을 어떤 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API) / 사외 AI 모델 API에서 쓰는지. **consumes에 없는 모델 = 자체 GPU 서빙** |
 | [5] | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
 | [6] | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
@@ -60,7 +60,7 @@ models:                                       # [2] 쓰는 모델 전부
     paramsB: null                             #    사외 모델은 파라미터 비공개 — 생략 가능
     aliases: ["claude-sonnet-4-5-20250929", "claude-sonnet-4-5"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 정의는 플랫폼이 등재, 이름만 참조
-gpuDashboardUnit: null                        # [3] GPU 할당 없음
+gpuDashboardUnits: []                         # [3] GPU 할당 없음
 consumes:                                     # [4] models 중 외부 조달 모델의 출처 — 없는 모델 = 자체 서빙
   - model: claude-sonnet-4.5
     provider: anthropic-api
@@ -84,7 +84,8 @@ models:                                       # [2] 위 "작성 과정 예시"�
     family: llama3.3
     paramsB: 70
     aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
-gpuDashboardUnit: "ai-platform:ds-assistant:dsllm-model-high"   # [3] 인프라유형:워크그룹:unit이름 — GPU 대시보드의 할당 unit (할당량 조회 키)
+gpuDashboardUnits:                            # [3] 할당 unit 프리픽스 목록 — 프리픽스 아래 unit 자동 포함
+  - "ai-platform:ds-assistant"                #     워크그룹 수준 (권장): dsllm-model-high 등 하위 unit 전부 포함
 consumes: []                                  # [4] 비어 있음 = 전 모델 자체 서빙
 serviceAccounts:                              # [5] 플랫폼 제공자만 — 발급한 API 키 ↔ 소비 서비스
   svc-key-a1: hr-chatbot
@@ -106,7 +107,8 @@ models:                                       # [2] 쓰는 모델 전부
     paramsB: 32
     aliases: ["Qwen/Qwen3-32B"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 이름만 참조
-gpuDashboardUnit: "ds-cloud:search-team:doc-summary-prod"   # [3] 자체 GPU 할당분
+gpuDashboardUnits:                            # [3] 워크그룹(search-team)을 타 서비스와 공유 → unit 수준까지 지정
+  - "ds-cloud:search-team:doc-summary-prod"
 consumes:                                     # [4] llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
   - model: llama3.3-70b
     provider: ds-assistant-portal
@@ -132,7 +134,7 @@ engine:
 | `models[].paramsB` | number / null | 정의 주체만 | **총 파라미터 수 (단위: B)** — 메모리 점유(GPU 장수·비용)의 근거. 파라미터 비공개 사외 모델은 null | `70` |
 | `models[].activeParamsB` | number | MoE만 | MoE의 **활성 파라미터 수 (단위: B)** — 토큰당 연산량(속도)의 근거. dense 모델은 생략 | `22` |
 | `models[].aliases` | string[] | 정의 주체만 | 실데이터에 등장하는 다른 표기 전부 — 운영자 정규화의 사전 | `["meta-llama/Llama-3.3-70B-Instruct", "llama70b"]` |
-| `gpuDashboardUnit` | string / null | O | GPU 대시보드의 할당 unit 키, `인프라유형:워크그룹:unit이름` — GPU 할당 없으면 null | `ai-platform:ds-assistant:dsllm-model-high` |
+| `gpuDashboardUnits` | string[] | O (없으면 `[]`) | GPU 대시보드 할당 unit **프리픽스 목록** — `인프라유형:워크그룹:unit이름` 계층의 어느 수준이든 가능, 프리픽스 아래 unit 자동 포함. 워크그룹 수준 권장, 공유 시에만 unit 수준. 긴 프리픽스 우선 | `["ai-platform:ds-assistant"]` |
 | `consumes[]` | array | O (없으면 `[]`) | models 중 **외부 조달 모델의 출처** — 여기 없는 모델 = 자체 GPU 서빙 | 유형 1·3 예시 참조 |
 | `consumes[].model` | string | O | models에 등재된 canonical | `llama3.3-70b` |
 | `consumes[].provider` | string | O | 조달처 — 사내 플랫폼이면 그 서비스의 `service` 표기, 사외면 API 제공사 표기 | `ds-assistant-portal` (사내) / `anthropic-api` (사외) |
@@ -178,7 +180,7 @@ engine:
 **제출 후 운영 — 갱신은 알림 기반 (기억할 필요 없음)**:
 
 - 미등록 모델 표기가 데이터에 나타나면 운영자가 후보와 함께 알림 → **"기존 ○○의 alias" / "새 모델" 중 택일 회신**하면 끝 (사전 갱신 후 7일 내 소급 재처리. 날짜 접미 패턴은 자동 처리, 무응답 시 "미등록"으로 계속 표시)
-- 엔진 교체·검증 위반·할당 매핑 불일치도 운영자가 감지해 알림
+- 엔진 교체·검증 위반도 운영자가 감지해 알림. GPU 대시보드에 **어느 프리픽스에도 안 걸리는 unit**이 나타나면 "미매핑 unit"으로 알림 (미등록 모델과 같은 폐루프)
 - **알림 채널**: 메타데이터 시트 [1]에 등록된 담당자(owner) 앞으로 사내 메신저·메일 발송 (채널 상세는 온보딩 안내 시 확정) — **owner가 바뀌면 메타데이터 시트 갱신 필수**
 
 ---
