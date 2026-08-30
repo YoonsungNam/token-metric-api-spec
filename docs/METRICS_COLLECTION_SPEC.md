@@ -236,9 +236,9 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
   "serving": [
     {
       "model": "llama3-70b",
-      "ttftMs":    { "p50": 320, "p90": 640, "p99": 1450 },
-      "itlMs":     { "p50": 28,  "p90": 45,  "p99": 95 },
-      "outputTps": { "avg": 33.5, "p50": 35.2 }
+      "ttftMs":    { "p50": 320, "p90": 640, "p95": 850, "p99": 1450 },
+      "itlMs":     { "p50": 28,  "p90": 45,  "p95": 58,  "p99": 95 },
+      "outputTps": { "p50": 35.2 }
     }
   ]
 }
@@ -254,7 +254,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
   "generatedAt": "2026-08-19T01:05:00+09:00",
   "gpu": [],
   "serving": [
-    { "model": "claude-sonnet-4.5", "ttftMs": { "p50": 850, "p90": 1600, "p99": 3200 }, "itlMs": { "p50": 22, "p90": 38, "p99": 80 } }
+    { "model": "claude-sonnet-4.5", "ttftMs": { "p50": 850, "p90": 1600, "p95": 2100, "p99": 3200 }, "itlMs": { "p50": 22, "p90": 38, "p95": 49, "p99": 80 } }
   ]
 }
 ```
@@ -276,8 +276,8 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | `gpu[].category` | enum | O | `serving` \| `standby` \| `test` |
 | `serving[]` | array | X | 케이스 D~E만 |
 | `serving[].model` | string | O | |
-| `serving[].ttftMs` / `itlMs` | object {p50,p90,p99} | X | ms |
-| `serving[].outputTps` | object {avg,p50} | X | tokens/s |
+| `serving[].ttftMs` / `itlMs` | object {p50,p90,p95,p99} | X | ms |
+| `serving[].outputTps` | object {p50} | X | tokens/s — avg 없음(비율 평균은 왜곡, 총 처리량은 토큰 API에서 파생). 느린 쪽 꼬리는 ITL p99가 담당 |
 
 ---
 
@@ -312,9 +312,11 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 
 | 지표 | 정의 | 단위 | 형태 |
 |---|---|---|---|
-| **TTFT** | 요청 수신 → 첫 토큰 | ms | p50 / p90 / p99 |
-| **ITL** | 토큰 간 간격 | ms | p50 / p90 / p99 |
-| **Output TPS** | 요청당 초당 생성 토큰 | tokens/s | avg / p50 |
+| **TTFT** | 요청 수신 → 첫 토큰 | ms | p50 / p90 / p95 / p99 |
+| **ITL** | 토큰 간 간격 | ms | p50 / p90 / p95 / p99 |
+| **Output TPS** | 요청당 초당 생성 토큰 | tokens/s | p50 (avg·상위 percentile 없음 — TPS의 나쁜 꼬리는 낮은 쪽이며 ITL p99가 대변) |
+
+**서비스 수준 성능은 어떻게 보나** — serving 블록은 **모델 단위가 정본**이다. 서로 다른 모델의 지연 분포를 합친 percentile은 트래픽 비중에 좌우되어(모델 A→B로 트래픽이 옮겨가기만 해도 값이 변함) 성능 변화와 트래픽 변화를 구분 못 하는 지표가 되므로, 서비스 화면의 성능도 모델별 행으로 표시한다. 서비스 전체(전 요청 혼합) 값이 필요하면 — 경로 (b)는 운영자가 모델 라벨의 버킷을 합산해 산출하고(서비스 추가 작업 없음), 경로 (a) 팀은 모델 구분 없이 전 요청으로 계산한 값을 선택 제공할 수 있다. 혼합값은 참고 지표로만 쓰고 SLO 판정은 모델 단위로 한다.
 
 | 케이스 | 담당자 작업 | serving 블록 |
 |---|---|---|
@@ -334,7 +336,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 → TTFT = 320ms
 → Output TPS = 100 ÷ 3.0s = 33.3
 → ITL = 청크 간 간격들 (각각이 샘플)
-하루치 전체 요청에서 p50/p90/p99 계산 → serving 블록에 기입
+하루치 전체 요청에서 p50/p90/p95/p99 계산 → serving 블록에 기입
 ```
 
 - **레플리카가 여러 대면 로그를 모아 한 번에 percentile 계산** — 레플리카별 p99의 평균 ≠ 전체 p99.
