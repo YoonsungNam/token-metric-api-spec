@@ -19,6 +19,73 @@ python3 scripts/check_metrics_api.py --base-url http://... --skip-behavior
 - **종료 코드**: `0` = FAIL 없음 (통과) / `1` = FAIL 있음 / `2` = 인자 오류 — CI 에 그대로 물릴 수 있다.
 - 스크립트는 **읽기만** 한다 (GET 호출 5~6회). 사내망에서 실행할 것.
 
+## 실행 예시
+
+### 통과하는 경우 (케이스 A — vLLM, serving 생략)
+
+올바르게 구현된 서비스에 실행하면 다음과 같이 나온다 (종료 코드 `0`):
+
+```
+$ python3 scripts/check_metrics_api.py --base-url http://ds-assistant-vllm.internal:8080
+# check_metrics_api — base=http://ds-assistant-vllm.internal:8080 date=2026-08-30
+
+[PASS] A1     호출 성공 (HTTP 200)
+[PASS] A2     Content-Type OK (application/json)
+[PASS] A3     JSON 파싱 OK
+[PASS] B1     최상위 필수 필드 존재 (date, serviceGroup, service, generatedAt, gpu, serving)
+[PASS] B2     date 에코 일치
+[PASS] B3     generatedAt OK (2026-08-31T01:30:00+09:00)
+[PASS] B4     gpu 배열 확인 (2행)
+[PASS] B9     serving: [] (케이스 A~C — 운영자 스크랩 경로)
+[PASS] B11    engine 자기신고 OK (type=vllm)
+[PASS] C4     같은 date 재호출 시 동일 결과 (멱등성)
+
+[PASS] C1     당일 date(2026-08-31) → 400
+[PASS] C1     오류 본문 형식 OK (code=invalid_date)
+[PASS] C2     미래 date(2026-09-07) → 400
+[PASS] C3     보존 기간 초과 date(2026-08-01) → 404
+[PASS] C5     형식 오류 date(2026-13-99) → 400
+
+결과: PASS 15 · WARN 0 · FAIL 0
+→ 통과! 운영자측 검증(할당 대비 Σ검증, 모델명 정규화 등)은 수집 개시 후 자동으로 수행됩니다.
+```
+
+### 실패하는 경우 (규칙 위반이 섞인 구현)
+
+계약을 어긴 구현에 실행하면 위반마다 FAIL 이 찍힌다 (종료 코드 `1`):
+
+```
+$ python3 scripts/check_metrics_api.py --base-url http://broken-svc.internal:8080
+# check_metrics_api — base=http://broken-svc.internal:8080 date=2026-08-30
+
+[PASS] A1     호출 성공 (HTTP 200)
+[PASS] A2     Content-Type OK (application/json)
+[PASS] A3     JSON 파싱 OK
+[PASS] B1     최상위 필수 필드 존재 (date, serviceGroup, service, generatedAt, gpu, serving)
+[PASS] B2     date 에코 일치
+[FAIL] B3     generatedAt 은 ISO 8601 + '+09:00' 오프셋이어야 함 (현재: '2026-08-31T01:30:00Z')
+[PASS] B4     gpu 배열 확인 (1행)
+[FAIL] B6     gpu[0]: category=serving 에서 model "unknown" 금지 (test 만 허용)
+[FAIL] B7     gpu[0]: gpuHours(120.0) > gpuCount×24(96) — 검증 규칙 위반
+[PASS] B9     serving 배열 확인 (1행) — 경로 (a)
+[FAIL] B9     serving[0].ttftMs percentile 이 비감소가 아님 (p50≤p90≤p95≤p99 여야 함): [900, 640, 850, 1450]
+[WARN] B10    serving[0]: ttftMs/itlMs 중 하나만 있음 — 스트리밍 모델은 쌍으로 제공
+[FAIL] B9     serving[0].outputTps 에 허용되지 않은 키 ['avg'] — p50만 허용 (avg·상위 percentile 없음)
+[WARN] B11    engine 자기신고 없음 — 권장 (버전 수기 갱신을 없애줌)
+[WARN] B12    스펙에 없는 최상위 필드: ['requests'] (토큰량·requests 는 보내지 말 것 — 이중 소스 금지)
+[FAIL] C4     같은 date 재호출 결과가 다름 (2차: HTTP 200) — 재수집 안전성 위반
+
+[PASS] C1     당일 date(2026-08-31) → 400
+[PASS] C2     미래 date(2026-09-07) → 400
+[PASS] C3     보존 기간 초과 date(2026-08-01) → 404
+[PASS] C5     형식 오류 date(2026-13-99) → 400
+
+결과: PASS 12 · WARN 3 · FAIL 6
+→ FAIL 항목을 수정한 뒤 재실행하세요. 규칙 근거: docs/METRICS_COLLECTION_SPEC.md
+```
+
+각 FAIL 의 수정 방법은 아래 [자주 나오는 FAIL](#자주-나오는-fail) 참조. 실제 터미널에서는 PASS/WARN/FAIL 이 색상(초록/노랑/빨강)으로 표시된다.
+
 ## 검사 항목
 
 ### A. 연결·기본
