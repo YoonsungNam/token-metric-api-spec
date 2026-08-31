@@ -46,15 +46,18 @@ info:
       메타데이터 시트의 consumes 로만 등록).
 
     ## serving 블록 — 성능 메트릭
-    - **경로 (a) 팀만 작성한다.** vLLM/SGLang 등 케이스 A~C 는 운영자 스크랩으로 대체되므로
-      빈 배열로 응답한다 (`"serving": []`).
+    - **자체 GPU 로 모델을 서빙하는 모든 팀(케이스 A~D·F)이 직접 집계해 작성한다.**
+      사외 AI 모델 API 전용(케이스 E)·사내 플랫폼 소비 전용 서비스만 빈 배열 허용.
+    - Prometheus 엔진 팀(케이스 A~C)은 추가로 엔진 `/metrics` 를 운영자에게 개방한다 —
+      운영자가 스크랩 값으로 자기신고 serving 값을 **교차 검증**한다 (집계 실수 감지).
+      A~C 는 엔진 히스토그램(그날 증가분 버킷)에서 percentile 을 산출할 수 있다.
     - **모델 단위가 정본** — 각 행은 그 모델로 처리된 요청만의 분포로 계산한다
-      (모델 간 표본 혼합 금지). 레플리카가 여러 대면 전체 로그를 모아 한 번에 percentile 을
+      (모델 간 표본 혼합 금지). 레플리카가 여러 대면 전체 로그·버킷을 모아 한 번에 percentile 을
       계산한다 (레플리카별 p99 의 평균 ≠ 전체 p99).
     - 표본 단위: TTFT·Output TPS 는 **요청당 1표본**, ITL 은 **토큰 간격당 1표본**.
     - 비스트리밍(케이스 F)은 TTFT/ITL 대신 **`e2eMs`(필수)·`custom`(선택)** 으로 채운다.
-    - **모델별로 경로가 다른 혼합 서비스는 모델×경로 단위로 판별한다** — serving 에는 경로 (a) 로
-      제공하는 모델의 행만 넣고, 스크랩 대상 모델(A~C)의 행은 넣지 않는다.
+    - serving 에는 **자체 서빙하는 모든 모델의 행**을 넣는다 — 사내 플랫폼에서 소비하는 모델의
+      행은 넣지 않는다 (성능은 플랫폼이 집계·제공).
 
     ## 데이터 확정 / 응답 규칙 (기존 토큰 API와 동일)
     - 이 API 는 **확정된 데이터만** `200` 으로 반환한다.
@@ -84,7 +87,7 @@ paths:
       summary: 일자별 모델 GPU Hour·성능 메트릭 조회
       description: |
         지정한 일자(`date`)의 확정된 **모델별 GPU Hour**(gpu 블록)와 **성능 메트릭**(serving 블록 —
-        경로 (a) 팀만)을 단건 반환한다.
+        자체 GPU 서빙 팀 전체)을 단건 반환한다.
       tags: [metrics]
       parameters:
         - name: date
@@ -104,7 +107,7 @@ paths:
                 $ref: '#/components/schemas/MetricsReport'
               examples:
                 caseA-vllm:
-                  summary: 케이스 A (vLLM) — serving 생략, gpu 블록만
+                  summary: 케이스 A (vLLM) — gpu + serving (엔진 히스토그램에서 집계)
                   value:
                     date: '2026-08-18'
                     serviceGroup: ds-assistant
@@ -114,7 +117,11 @@ paths:
                     gpu:
                       - { model: llama3.3-70b, gpuType: H100, gpuCount: 4, gpuHours: 96.0, category: serving }
                       - { model: llama3.3-70b, gpuType: H100, gpuCount: 1, gpuHours: 24.0, category: standby }
-                    serving: []
+                    serving:
+                      - model: llama3.3-70b
+                        ttftMs: { p50: 280, p90: 560, p95: 720, p99: 1200 }
+                        itlMs: { p50: 24, p90: 38, p95: 47, p99: 80 }
+                        outputTps: { p50: 41.0 }
                 caseD-custom-serving:
                   summary: 케이스 D (자체 구현) — serving 블록 채움
                   value:
@@ -377,7 +384,7 @@ components:
       description: |
         모델 단위 성능 메트릭 행. 그 모델로 처리된 요청만의 분포로 계산한다
         (모델 간 표본 혼합 금지 · 레플리카 로그는 모아서 한 번에 percentile).
-        스트리밍(케이스 D): ttftMs·itlMs·outputTps 채움.
+        스트리밍(케이스 A~D): ttftMs·itlMs·outputTps 채움.
         비스트리밍(케이스 F): e2eMs 필수, custom 선택.
       required: [model]
       minProperties: 2
@@ -462,8 +469,8 @@ components:
         serving:
           type: array
           description: |
-            성능 메트릭 행 목록 — **경로 (a) 팀만 채운다.**
-            케이스 A~C(vLLM/SGLang 등 운영자 스크랩)는 빈 배열로 응답한다 (키 생략 불가).
+            성능 메트릭 행 목록 — **자체 GPU 서빙 팀 전체(케이스 A~D·F)가 채운다.**
+            사외 AI 모델 API 전용(케이스 E)·사내 플랫폼 소비 전용 서비스만 빈 배열 (키 생략 불가).
           items:
             $ref: '#/components/schemas/ServingRecord'
 

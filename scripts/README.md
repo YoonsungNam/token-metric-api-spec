@@ -24,7 +24,7 @@ python3 scripts/check_metrics_api.py --base-url http://... --no-fix-guide
 
 ## 실행 예시
 
-### 통과하는 경우 (케이스 A — vLLM, serving 생략)
+### 통과하는 경우 (케이스 A — vLLM, serving 자체 집계 + 검증용 /metrics 개방)
 
 올바르게 구현된 서비스에 실행하면 다음과 같이 나온다 (종료 코드 `0`):
 
@@ -39,7 +39,7 @@ $ python3 scripts/check_metrics_api.py --base-url http://ds-assistant-vllm.inter
 [PASS] B2     date 에코 일치
 [PASS] B3     generatedAt OK (2026-08-31T01:30:00+09:00)
 [PASS] B4     gpu 배열 확인 (2행)
-[PASS] B9     serving: [] (케이스 A~C — 운영자 스크랩 경로)
+[PASS] B9     serving 배열 확인 (1행) — 모델별 성능
 [PASS] B11    engine 자기신고 OK (type=vllm)
 [PASS] C4     같은 date 재호출 시 동일 결과 (멱등성)
 
@@ -132,7 +132,7 @@ $ python3 scripts/check_metrics_api.py --base-url http://broken-svc.internal:808
 
 | ID | 검사 |
 |---|---|
-| B1 | 최상위 필수 필드: `date` `serviceGroup` `service` `generatedAt` `gpu` `serving` (경로 (b)는 `serving: []` — 키 생략·null 불가) |
+| B1 | 최상위 필수 필드: `date` `serviceGroup` `service` `generatedAt` `gpu` `serving` (키 생략·null 불가 — 자체 서빙 없을 때만 `[]`) |
 | B2 | `date` 에코가 요청 값과 일치 |
 | B3 | `generatedAt` 이 ISO 8601 + `+09:00` 오프셋 |
 | B4 | gpu 행 필수 필드: `model` `gpuType` `gpuCount` `gpuHours` `category` |
@@ -141,7 +141,7 @@ $ python3 scripts/check_metrics_api.py --base-url http://broken-svc.internal:808
 | B7 | `gpuCount` > 0, `gpuHours` ≥ 0, **`gpuHours` ≤ `gpuCount` × 24** |
 | B8 | (경고) 동일 (model, gpuType, category) 중복 행 / serving 행 부재 |
 | B9 | serving 행: `ttftMs`/`itlMs`/`e2eMs` 는 p50·p90·p95·p99 **4키 완비 + 비감소**, `outputTps` 는 **p50만**, `custom` 은 name·unit 필수 + 값 키(p50/p90/p95/p99) 최소 1개 |
-| B10 | serving 행에 지표 최소 1개 / (경고) ttftMs·itlMs 는 쌍으로 · custom 만 있는 행 · 동일 model 중복 행 |
+| B10 | serving 행에 지표 최소 1개 · **gpu serving 모델의 성능 행 누락**(빈 배열이면 FAIL, 일부 누락이면 경고) / (경고) ttftMs·itlMs 는 쌍으로 · custom 만 있는 행 · 동일 model 중복 행 |
 | B11 | `engine` 자기신고 형식 — 없으면 경고 (권장 필드) |
 | B12 | (경고) 스펙에 없는 최상위 필드 — 토큰량·requests 를 보내고 있으면 여기서 걸린다 (이중 소스 금지) |
 

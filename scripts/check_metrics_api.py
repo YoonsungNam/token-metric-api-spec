@@ -44,7 +44,7 @@ FIX_GUIDES = {
 
     "required-fields": """▍최상위 필수 필드 (B1)
   규칙: date · serviceGroup · service · generatedAt · gpu · serving 6개는 **항상** 포함한다.
-    - serving 은 스크랩 경로(케이스 A~C)여도 빈 배열 [] 로 포함 (키 생략·null 불가)
+    - serving 은 항상 포함 — GPU 서빙 팀(케이스 A~D·F)은 모델별 행을 채우고, 사외 API 전용만 빈 배열 [] (키 생략·null 불가)
     - serviceGroup·service 는 메타데이터 시트 공식 표기와 **같은 문자열** (기존 토큰 API 와도 동일 — JOIN 조건)
   올바른 예: {"date":"2026-08-18","serviceGroup":"ds-assistant","service":"ds-assistant-portal",
              "generatedAt":"2026-08-19T01:30:00+09:00","gpu":[...],"serving":[]}""",
@@ -111,14 +111,14 @@ FIX_GUIDES = {
   올바른 예: {"name": "queueWaitMs", "unit": "ms", "p50": 120, "p99": 900}""",
 
     "serving-structure": """▍serving 블록 구조 (B9)
-  규칙: serving 은 배열이다 — 경로 (b)(케이스 A~C)는 빈 배열 [], null·키 생략 불가.
+  규칙: serving 은 배열이다 — 자체 GPU 서빙 팀은 모델별 행을 채우고, 사외 API 전용·플랫폼 소비 전용만 빈 배열 []. null·키 생략 불가.
   각 행은 모델당 1행: {"model": canonical, ttftMs/itlMs/outputTps/e2eMs/custom 중 해당 지표}.
     - model 은 canonical 표기 필수 ("unknown" 불가 — 성능은 모델 단위가 정본)
     - 각 행의 지표는 **그 모델로 처리된 요청만**의 분포로 계산 (모델 간 표본 혼합 금지)""",
 
     "no-metrics": """▍serving 행의 지표 구성 (B10)
   규칙: 행마다 표준 지표 최소 1개 —
-    - 스트리밍(케이스 D): ttftMs + itlMs (쌍으로) + outputTps
+    - 스트리밍(케이스 A~D): ttftMs + itlMs (쌍으로) + outputTps — A~C는 엔진 히스토그램에서 산출 가능
     - 비스트리밍(케이스 F): e2eMs 필수, custom 은 보조 (custom 만으로는 부족)
   측정법(케이스 D): 요청 수신·첫 청크·마지막 청크 시각 로깅 → TTFT = 첫 청크 − 수신,
     ITL = 청크 간 간격(간격당 1표본), TPS = 출력 토큰 ÷ (마지막 − 첫 청크). 상세: 스펙 §4 작성 가이드.""",
@@ -159,6 +159,13 @@ FIX_GUIDES = {
   위반의 전형적 원인: 호출 때마다 재집계 / 응답에 현재 시각·난수가 섞임 / 확정 전 데이터를 200 으로 응답.
   구현: 일자 확정 시점에 결과를 저장(테이블·스냅샷)하고 이후엔 저장본만 반환.
         정정이 필요하면 재집계 후 저장본을 교체하고 운영자에게 재수집을 요청한다.""",
+
+    "serving-empty": """▍GPU 서빙 중인데 성능 행 없음 (B10)
+  규칙: gpu 블록에 serving 행이 있으면 그 모델들의 성능 행을 serving 배열에 채운다 —
+  vLLM/SGLang(케이스 A~C)도 자체 집계 대상이다 (운영자는 개방된 엔진 /metrics 로 교차 검증만 한다).
+  산출 힌트(A~C): 엔진 히스토그램의 그날 증가분 버킷에서 percentile 계산 —
+    histogram_quantile(0.99, sum by (le, model_name) (increase(vllm:time_to_first_token_seconds_bucket[1d])))
+  사내 플랫폼에서 소비만 하는 모델은 행을 넣지 않는다 (성능은 플랫폼이 제공).""",
 
     "date-format-400": """▍date 형식 검증 → 400 (C5)
   규칙: date 파라미터를 YYYY-MM-DD 로 파싱 검증하고 실패 시 400 (2026-13-99 같은 값 거부).
@@ -293,19 +300,22 @@ def check_custom(path, arr):
                 report("FAIL", "B9", f"{p}.{k} 는 숫자여야 함", fix="custom")
 
 
-def check_serving_block(serving, present):
+def check_serving_block(serving, present, gpu_serving_models):
     if serving is None:
         if present:
-            report("FAIL", "B9", "serving 이 null — 배열이어야 함 (경로 (b)는 빈 배열 [])", fix="serving-structure")
+            report("FAIL", "B9", "serving 이 null — 배열이어야 함 (자체 서빙 없으면 빈 배열 [])", fix="serving-structure")
         # 키 자체가 없으면 B1 에서 이미 FAIL 처리됨
         return
     if not isinstance(serving, list):
         report("FAIL", "B9", "serving 은 배열이어야 함", fix="serving-structure")
         return
     if not serving:
-        report("PASS", "B9", "serving: [] (케이스 A~C — 운영자 스크랩 경로)")
+        if gpu_serving_models:
+            report("FAIL", "B10", f"gpu 블록에 serving 행이 있는데 성능 행이 없음 (모델: {sorted(gpu_serving_models)}) — GPU 서빙 팀(케이스 A~D·F)은 serving 작성 필수", fix="serving-empty")
+        else:
+            report("PASS", "B9", "serving: [] (사외 API 전용·플랫폼 소비 전용이면 정상)")
         return
-    report("PASS", "B9", f"serving 배열 확인 ({len(serving)}행) — 경로 (a)")
+    report("PASS", "B9", f"serving 배열 확인 ({len(serving)}행) — 모델별 성능")
     allowed = {"model", "ttftMs", "itlMs", "outputTps", "e2eMs", "custom"}
     seen_models = set()
     for i, row in enumerate(serving):
@@ -350,6 +360,9 @@ def check_serving_block(serving, present):
                     report("FAIL", "B9", f"{p}.outputTps 에 허용되지 않은 키 {sorted(extra_t)} — p50만 허용 (avg·상위 percentile 없음)", fix="tps")
         if "custom" in row:
             check_custom(f"{p}.custom", row["custom"])
+    missing_models = gpu_serving_models - seen_models
+    if missing_models:
+        report("WARN", "B10", f"gpu serving 모델 중 성능 행이 없는 모델: {sorted(missing_models)}", fix="serving-empty")
 
 
 def check_body(body, req_date):
@@ -365,7 +378,7 @@ def check_body(body, req_date):
 
     missing = [k for k in ("date", "serviceGroup", "service", "generatedAt", "gpu", "serving") if k not in doc]
     if missing:
-        report("FAIL", "B1", f"최상위 필수 필드 누락: {missing} (serving 은 경로 (b)여도 빈 배열 [] 로 포함)", fix="required-fields")
+        report("FAIL", "B1", f"최상위 필수 필드 누락: {missing} (serving 은 자체 서빙이 없어도 빈 배열 [] 로 포함)", fix="required-fields")
     else:
         report("PASS", "B1", "최상위 필수 필드 존재 (date, serviceGroup, service, generatedAt, gpu, serving)")
 
@@ -389,9 +402,14 @@ def check_body(body, req_date):
     else:
         report("FAIL", "B3", f"generatedAt 은 ISO 8601 + '+09:00' 오프셋이어야 함 (현재: {gen!r})", fix="generated-at")
 
+    gpu_serving_models = set()
+    if isinstance(doc.get("gpu"), list):
+        for r in doc["gpu"]:
+            if isinstance(r, dict) and r.get("category") == "serving" and isinstance(r.get("model"), str) and r["model"] not in ("", "unknown"):
+                gpu_serving_models.add(r["model"])
     if "gpu" in doc:
         check_gpu_block(doc["gpu"])
-    check_serving_block(doc.get("serving"), "serving" in doc)
+    check_serving_block(doc.get("serving"), "serving" in doc, gpu_serving_models)
 
     if "engine" in doc and doc["engine"] is not None:
         eng = doc["engine"]

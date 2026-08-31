@@ -12,9 +12,9 @@
 |---|---|---|
 | **모든 서비스** | [1] 메타데이터 시트(엑셀) 제출 (§1) | 온보딩 시 1회 |
 | **모든 서비스** | [2] GET `/v1/metrics` 구현 — gpu 블록 (§2~3) | **~9/18** |
-| vLLM / SGLang 등 Prometheus 엔진 팀 (케이스 A~C) | [3a] `/metrics` URL 제출 + 네트워크 개방 — **이러면 끝** (serving 블록 불필요) | 온보딩 시 |
-| 자체 구현 서빙·비스트리밍 팀 (케이스 D·F) | [3b] serving 블록 자체 집계 (§4) | ~9/18 |
-| 사외 AI 모델 API 팀 (케이스 E) | [3b] serving 블록 자체 집계 — **선택** (§4) | 원할 때 |
+| **GPU 서빙 팀 전체** (케이스 A~D·F) | [3a] serving 블록 자체 집계 (§4 — A~C는 엔진 히스토그램 활용 가능) | ~9/18 |
+| vLLM / SGLang 등 Prometheus 엔진 팀 (케이스 A~C) | [3b] 엔진 `/metrics` URL 제출 + 네트워크 개방 — **운영자 교차 검증용** (§4) | 온보딩 시 |
+| 사외 AI 모델 API 팀 (케이스 E) | [3a] serving 블록 자체 집계 — **선택** (§4) | 원할 때 |
 
 **역할 표기** — 이 문서는 두 역할로 구분해 쓴다:
 
@@ -46,7 +46,7 @@
 | [2] | 모델 표기 | 서비스가 **사용하는 모든 모델** — 자체 서빙, 사내 플랫폼 경유, 사외 AI 모델 API 직접 호출 전부. canonical 정의(alias·family·파라미터 수)는 **서빙 주체가 등재** — 사내 플랫폼 경유 모델은 이름만 참조로 적는다 |
 | [3] | GPU 할당 매핑 (`gpuDashboardUnits`) | **GPU 대시보드에서 우리 서비스의 할당 unit들을 가리키는 목록** — 운영자가 이걸로 할당량(고정 쿼터)을 조회한다. 각 항목은 `infraType`(인프라유형)·`workgroup`(워크그룹)·`unit`(선택) 세 필드 — **unit을 비우면 그 워크그룹의 모든 unit이 자동 포함**된다 (unit이 생기고 없어져도 시트 갱신 불필요). **워크그룹 수준 권장**, 워크그룹을 타 서비스와 공유할 때만 unit까지 지정. unit 지정 항목이 워크그룹 항목보다 우선하고, 같은 unit이 두 서비스에 매핑되면 검증 알림 — unit 하나는 결과적으로 service 하나에만 귀속. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
 | [4] | 소비 관계 (consumes) | **models 중 외부에서 조달하는 모델의 출처** — 어떤 모델을 어떤 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API) / 사외 AI 모델 API에서 쓰는지. **consumes에 없는 모델 = 자체 GPU 서빙** |
-| [5] | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
+| [5] | `/metrics` URL | (케이스 A~C만) **검증용** 스크랩 URL + 엔진 종류 — 운영자가 자기신고 serving 값을 교차 검증하는 채널 |
 
 **작성 예시 — 서비스 유형별 3가지** (주석의 [1]~[5]는 위 표의 항목 번호):
 
@@ -91,7 +91,7 @@ gpuDashboardUnits:                            # [3] 할당 unit 목록 — unit 
   - infraType: ds-cloud                       #     워크그룹이 여러 개면 나열 — 인프라유형이 달라도 됨
     workgroup: ds-assistant-batch
 consumes: []                                  # [4] 비어 있음 = 전 모델 자체 서빙
-metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # [5] §4 케이스 A — 이것으로 serving 블록 생략
+metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # [5] §4 케이스 A — 운영자 교차 검증용 스크랩 대상
 engine:                                       # [5] 버전은 API 자기신고로 수신 — 수기 갱신 불필요
   type: vllm
 ```
@@ -146,7 +146,7 @@ engine:
 | `consumes[].model` | string | O | models에 등재된 canonical | `llama3.3-70b` |
 | `consumes[].provider` | string | O | 조달처 — 사내 플랫폼이면 그 서비스의 `service` 표기, 사외면 API 제공사 표기 | `ds-assistant-portal` (사내) / `anthropic-api` (사외) |
 | `consumes[].type` | `internal`/`external` | O | internal = 사내 플랫폼, external = 사외 AI 모델 API | `internal` |
-| `metricsUrl` | string / null | 케이스 A~C만 | 운영자측 Prometheus가 스크랩할 `/metrics` URL | `http://ds-assistant-vllm.internal:8000/metrics` |
+| `metricsUrl` | string / null | 케이스 A~C만 | 운영자 수집기가 **교차 검증용**으로 스크랩할 엔진 `/metrics` URL | `http://ds-assistant-vllm.internal:8000/metrics` |
 | `engine` | object {type} / null | 권장 | 추론 엔진 종류 (`vllm`/`sglang`/`custom` 등) — 버전은 API 자기신고로 수신 | `type: vllm` |
 
 **모델 표기([2]) 작성법**
@@ -209,7 +209,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 
 - 같은 date 재호출 시 동일 결과. **02:00 이전에 전일 데이터 확정** (§5).
 
-**응답 예시 1 — vLLM 팀 (케이스 A): serving 생략**
+**응답 예시 1 — vLLM 팀 (케이스 A): gpu + serving (엔진 히스토그램에서 집계)**
 
 ```json
 {
@@ -222,7 +222,14 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
     { "model": "llama3.3-70b", "gpuType": "H100", "gpuCount": 4, "gpuHours": 96.0, "category": "serving" },
     { "model": "llama3.3-70b", "gpuType": "H100", "gpuCount": 1, "gpuHours": 24.0, "category": "standby" }
   ],
-  "serving": []
+  "serving": [
+    {
+      "model": "llama3.3-70b",
+      "ttftMs":    { "p50": 280, "p90": 560, "p95": 720, "p99": 1200 },
+      "itlMs":     { "p50": 24,  "p90": 38,  "p95": 47,  "p99": 80 },
+      "outputTps": { "p50": 41.0 }
+    }
+  ]
 }
 ```
 
@@ -278,7 +285,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | `gpu[].gpuCount` | number | O | 해당일 매핑 장수 (증감 시 최대) — 비용 계산 미사용 |
 | `gpu[].gpuHours` | number | O | 장수 × 매핑·할당 시간 (적분값) — 비용의 근거 |
 | `gpu[].category` | enum | O | `serving` \| `standby` \| `test` |
-| `serving[]` | array | O (경로 (b)는 `[]`) | **경로 (a) 팀만 채움** — 케이스 D·F는 채움, E는 선택, A~C는 경로 (a) 선택 시. 그 외(케이스 A~C 기본)는 빈 배열 `[]` |
+| `serving[]` | array | O | **자체 GPU 서빙 팀 전체(케이스 A~D·F)가 자체 서빙 모델별 행을 채움**. 사외 API 전용(케이스 E)·사내 플랫폼 소비 전용 서비스만 빈 배열 `[]` 허용 |
 | `serving[].model` | string | O | |
 | `serving[].ttftMs` / `itlMs` | object {p50,p90,p95,p99} | X | ms |
 | `serving[].outputTps` | object {p50} | X | tokens/s — avg 없음(비율 평균은 왜곡, 총 처리량은 토큰 API에서 파생). 느린 쪽 꼬리는 ITL p99가 담당 |
@@ -318,22 +325,22 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 
 ## 4. 성능 메트릭 — 내 케이스 찾기
 
-> **먼저 자기 케이스부터 확인한다.** serving 블록은 **경로 (a) 팀만** 작성한다 — **케이스 A~C(vLLM/SGLang 등)는 URL 제출로 끝이며 serving 블록을 쓰지 않는다** (`"serving": []`). 아래 "serving 블록 작성 가이드"도 경로 (a) 팀만 읽으면 된다.
+> **자체 GPU로 모델을 서빙하는 모든 팀(케이스 A~D·F)은 serving 블록을 직접 집계해 작성한다.** 사외 AI 모델 API만 쓰는 팀(케이스 E)만 선택이다. Prometheus 엔진 팀(케이스 A~C)은 추가로 **엔진 `/metrics`를 운영자에게 개방**한다 — 운영자가 스크랩 값으로 자기신고 serving 값을 **교차 검증**하기 위한 채널이다.
 >
-> **모델별로 경로가 다른 혼합 서비스**(예: vLLM 모델 + 자체 구현 비스트리밍 모델)는 **모델×경로 단위로 판별**한다 — serving 배열에는 **경로 (a)로 제공하는 모델의 행만** 넣고, 스크랩 대상 모델(A~C)의 행은 넣지 않는다. gpu 블록은 케이스와 무관하게 **자체 GPU 사용분 전부**를 담는다 (§3).
+> serving 배열에는 **자체 서빙하는 모든 모델의 행**을 넣는다. 사내 플랫폼에서 소비하는 모델의 행은 넣지 않는다 (성능은 플랫폼이 집계·제공). gpu 블록은 케이스와 무관하게 **자체 GPU 사용분 전부**를 담는다 (§3).
 
 | 케이스 | 담당자 작업 | serving 블록 |
 |---|---|---|
-| A. vLLM | `/metrics` URL 제출 + 운영자측 Prometheus에 네트워크 개방 (끝) | 생략 |
-| B. SGLang | 상동 (`--enable-metrics` 필요할 수 있음) | 생략 |
-| C. 기타 Prometheus 엔진 (TGI 등) | 상동 + TTFT/ITL 메트릭명 매핑을 운영자와 확정 | 생략 |
-| D. 자체 구현 서빙 | 작성 가이드대로 로깅·집계 → GET 제공 | 채움 |
+| A. vLLM | serving 블록 자체 집계(엔진 히스토그램 활용 가능) + 검증용 `/metrics` URL 제출·개방 | 채움 |
+| B. SGLang | 상동 (`--enable-metrics` 필요할 수 있음) | 채움 |
+| C. 기타 Prometheus 엔진 (TGI 등) | 상동 + TTFT/ITL 메트릭명 매핑을 운영자와 확정 | 채움 |
+| D. 자체 구현 서빙 | 작성 가이드대로 로깅·집계 → GET 제공 (엔진 검증 채널 없음) | 채움 |
 | E. 사외 AI 모델 API 연동 | `gpu: []`. 원하면 게이트웨이에서 측정 — 측정 위치가 엔진이 아니므로 타 서비스 수치와 단순 비교하지 않음 | 선택 |
 | F. 비스트리밍 | TTFT/ITL 해당 없음 — `e2eMs`(표준)·`custom[]`(선택)으로 작성 (작성 가이드 참조) | 채움 |
 
-- **경로 선택권**: 케이스 A~C 팀도 자체 성능 집계 체계(자체 Prometheus, 로그 기반 집계 등)가 이미 있으면 스크랩 개방 대신 **경로 (a) — serving 블록 직접 제공 — 를 선택할 수 있다.** 단, 이 경우 레플리카 통합 집계와 엔진 재시작 시 유실 처리는 서비스 책임이 된다 (작성 가이드의 케이스 D 주의사항과 동일). 선택 시 메타데이터 시트의 metricsUrl은 null로 제출.
+- **교차 검증**: 운영자는 개방된 엔진 `/metrics`(히스토그램 버킷)를 스크랩해 같은 지표를 독립 산출하고, 자기신고 serving 값과 대조한다 — 오차 임계 초과 시 담당자 알림. 레플리카 합산 오류·리셋 유실 같은 집계 실수를 잡는 안전장치다. (케이스 D는 엔진 채널이 없으므로 토큰 교차 검증 등 운영자측 검증만 적용)
 
-**지표 정의** — 어느 경로든 대시보드에 표시되는 공통 지표 (경로 (b)는 운영자가 스크랩으로 산출):
+**지표 정의** — 어느 케이스든 대시보드에 표시되는 공통 지표:
 
 | 지표 | 정의 | 단위 | 형태 |
 |---|---|---|---|
@@ -341,11 +348,17 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | **ITL** | 토큰 간 간격 | ms | p50 / p90 / p95 / p99 |
 | **Output TPS** | 요청당 초당 생성 토큰 | tokens/s | p50 (avg·상위 percentile 없음 — TPS의 나쁜 꼬리는 낮은 쪽이며 ITL p99가 대변) |
 
-**서비스 수준 성능은 어떻게 보나** — 성능은 **모델 단위가 정본**이다. 서로 다른 모델의 지연 분포를 합친 percentile은 트래픽 비중에 좌우되어(모델 A→B로 트래픽이 옮겨가기만 해도 값이 변함) 성능 변화와 트래픽 변화를 구분 못 하는 지표가 되므로, 서비스 화면의 성능도 모델별 행으로 표시한다. 서비스 전체(전 요청 혼합) 값이 필요하면 — 경로 (b)는 운영자가 모델 라벨의 버킷을 합산해 산출하고(서비스 추가 작업 없음), 경로 (a) 팀은 모델 구분 없이 전 요청으로 계산한 값을 선택 제공할 수 있다. 혼합값은 참고 지표로만 쓰고 SLO 판정은 모델 단위로 한다.
+**서비스 수준 성능은 어떻게 보나** — 성능은 **모델 단위가 정본**이다. 서로 다른 모델의 지연 분포를 합친 percentile은 트래픽 비중에 좌우되어(모델 A→B로 트래픽이 옮겨가기만 해도 값이 변함) 성능 변화와 트래픽 변화를 구분 못 하는 지표가 되므로, 서비스 화면의 성능도 모델별 행으로 표시한다. 서비스 전체(전 요청 혼합) 값이 필요하면 모델 구분 없이 전 요청으로 계산한 값을 선택 제공할 수 있다. 혼합값은 참고 지표로만 쓰고 SLO 판정은 모델 단위로 한다.
 
-### serving 블록 작성 가이드 — 경로 (a) 팀만 해당
+### serving 블록 작성 가이드
 
-- 표본 단위: TTFT·Output TPS는 **요청당 1표본**, ITL은 **토큰 간격당 1표본** (요청당 평균이 아님 — 엔진 히스토그램과 동일 기준이라 경로 (a)/(b) 값이 비교 가능)
+- 표본 단위: TTFT·Output TPS는 **요청당 1표본**, ITL은 **토큰 간격당 1표본** (요청당 평균이 아님 — 엔진 히스토그램과 동일 기준이라 운영자의 스크랩 검증값과 비교 가능)
+
+**산출 방법 (케이스 A~C — 엔진 히스토그램 활용)** — 자체 요청 로그 없이도 엔진 Prometheus 히스토그램에서 daily percentile을 산출할 수 있다:
+
+- 자체 Prometheus가 있으면: `histogram_quantile(0.99, sum by (le, model_name) (increase(vllm:time_to_first_token_seconds_bucket[1d])))` 식으로 그날 증가분 버킷에서 계산 — 레플리카 합산은 `sum by (le)`가 처리
+- 없으면: 매일 자정 직후 `/metrics`를 읽어 전일 스냅샷과의 버킷 차분으로 계산 — **엔진 재시작 시 카운터가 리셋**되므로 주기 스냅샷·리셋 보정 필요 (함정 상세: internal/COLLECTOR_DESIGN.md §1)
+- 운영자가 같은 히스토그램을 스크랩해 교차 검증하므로, 집계가 틀리면 알림으로 잡힌다
 
 **측정 방법 (케이스 D)** — 스트리밍 응답 코드에 시각 3종을 로깅:
 
@@ -416,8 +429,8 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 - [ ] 모델 표기를 canonical + alias + 파라미터 수(paramsB, MoE는 activeParamsB 포함)로 정리해 제출했는가? 파인튜닝은 `-ft-{용도}`로 분리했는가?
 - [ ] gpu 블록을 §3 상황별 예시대로 작성 가능한가? (serving·standby는 `unknown` 금지)
 - [ ] 추론 엔진 확인 → §4 케이스 판별 + 응답에 `engine` 자기신고 포함하는가?
-- [ ] (케이스 A~C) `/metrics` URL 제출 + 운영자측 Prometheus 접근 개방 가능한가?
-- [ ] (케이스 D) 시각 3종 로깅 + 레플리카 통합 집계 가능한가?
+- [ ] (GPU 서빙 팀 — 케이스 A~D·F) serving 블록을 모델별로 자체 집계·제공 가능한가? (A~C는 엔진 히스토그램 활용, D는 시각 3종 로깅 — 레플리카는 통합 집계)
+- [ ] (케이스 A~C) 검증용 `/metrics` URL 제출 + 운영자측 수집기 접근 개방 가능한가?
 - [ ] `/v1/metrics`를 02:00 이전에 전일 확정 상태로 제공 가능한가?
 - [ ] (플랫폼 제공자) API 키 발급 시 소비 서비스의 `service` 표기를 받아 기록하고, 토큰 사용량에서 소비자 호출분을 그 표기로 구분 가능한가?
 - [ ] (사내 플랫폼 소비자) consumes(모델 출처) 제출 + 그 사용분의 GPU·토큰을 보내지 않는다는 것을 인지했는가?
