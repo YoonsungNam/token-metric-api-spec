@@ -7,7 +7,7 @@
 
 ## 1. 체계의 골격 (초기 확정)
 
-- **목적**: 기존 토큰 API(토큰·requests) 위에 **모델별 GPU Hour + 서비스 메트릭(TTFT·ITL·Output TPS)** 을 추가 수집 → 비용·효율·성능을 한 화면에
+- **목적**: 기존 토큰 API(토큰·requests) 위에 **모델별 GPU Hour + 성능 메트릭(TTFT·ITL·Output TPS)** 을 추가 수집 → 비용·효율·성능을 한 화면에
 - **설계 원칙**: ① 이중 소스 금지 ② 기존 계약 상속(pull, 식별자, 응답 규칙) ③ 담당자 부담 최소(서비스당 GET 1개)
 - **수집 경로**: GET `/v1/metrics` daily pull (`409`로 "0"과 "미확정" 구분) + vLLM/SGLang은 중앙 Prometheus 스크랩(구현 불필요) — 케이스 A~F 가이드
 - **비용**: 정본은 **할당**(GPU 대시보드) × 기종 단가. gpu 블록은 할당 비용의 용도 분해(serving/standby/test — 유휴는 중앙 산출). 효율 지표는 serving만 사용
