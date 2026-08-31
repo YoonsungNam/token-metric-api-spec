@@ -12,8 +12,9 @@
 |---|---|---|
 | **모든 서비스** | [1] 메타데이터 시트(엑셀) 제출 (§1) | 온보딩 시 1회 |
 | **모든 서비스** | [2] GET `/v1/metrics` 구현 — gpu 블록 (§2~3) | **~9/18** |
-| vLLM / SGLang 팀 | [3a] `/metrics` URL 제출 + 네트워크 개방 — **이러면 끝** (serving 블록 불필요) | 온보딩 시 |
-| 자체 구현 서빙 / 사외 AI 모델 API 팀 | [3b] serving 블록 자체 집계 (§4) | ~9/18 |
+| vLLM / SGLang 등 Prometheus 엔진 팀 (케이스 A~C) | [3a] `/metrics` URL 제출 + 네트워크 개방 — **이러면 끝** (serving 블록 불필요) | 온보딩 시 |
+| 자체 구현 서빙·비스트리밍 팀 (케이스 D·F) | [3b] serving 블록 자체 집계 (§4) | ~9/18 |
+| 사외 AI 모델 API 팀 (케이스 E) | [3b] serving 블록 자체 집계 — **선택** (§4) | 원할 때 |
 
 **역할 표기** — 이 문서는 두 역할로 구분해 쓴다:
 
@@ -79,7 +80,7 @@ engine: null
 serviceGroup: ds-assistant                    # [1]
 service: ds-assistant-portal                  # [1]
 owner: kim@samsung.com                        # [1]
-models:                                       # [2] 위 "작성 과정 예시"의 결과 그대로
+models:                                       # [2] 아래 "작성 과정 예시"의 결과 그대로
   - canonical: llama3.3-70b
     family: llama3.3
     paramsB: 70
@@ -235,11 +236,11 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
   "generatedAt": "2026-08-19T01:10:00+09:00",
   "engine": { "type": "custom" },
   "gpu": [
-    { "model": "llama3-70b", "gpuType": "A100", "gpuCount": 2, "gpuHours": 48.0, "category": "serving" }
+    { "model": "qwen3-32b", "gpuType": "A100", "gpuCount": 2, "gpuHours": 48.0, "category": "serving" }
   ],
   "serving": [
     {
-      "model": "llama3-70b",
+      "model": "qwen3-32b",
       "ttftMs":    { "p50": 320, "p90": 640, "p95": 850, "p99": 1450 },
       "itlMs":     { "p50": 28,  "p90": 45,  "p95": 58,  "p99": 95 },
       "outputTps": { "p50": 35.2 }
@@ -277,12 +278,12 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | `gpu[].gpuCount` | number | O | 해당일 매핑 장수 (증감 시 최대) — 비용 계산 미사용 |
 | `gpu[].gpuHours` | number | O | 장수 × 매핑·할당 시간 (적분값) — 비용의 근거 |
 | `gpu[].category` | enum | O | `serving` \| `standby` \| `test` |
-| `serving[]` | array | X | 케이스 D~E만 |
+| `serving[]` | array | O (경로 (b)는 `[]`) | **경로 (a) 팀만 채움** — 케이스 D·F는 채움, E는 선택, A~C는 경로 (a) 선택 시. 그 외(케이스 A~C 기본)는 빈 배열 `[]` |
 | `serving[].model` | string | O | |
 | `serving[].ttftMs` / `itlMs` | object {p50,p90,p95,p99} | X | ms |
 | `serving[].outputTps` | object {p50} | X | tokens/s — avg 없음(비율 평균은 왜곡, 총 처리량은 토큰 API에서 파생). 느린 쪽 꼬리는 ITL p99가 담당 |
 | `serving[].e2eMs` | object {p50,p90,p95,p99} | 케이스 F 필수 | 요청 수신 → 응답 완료 지연 (ms) — 스트리밍 서비스는 선택 |
-| `serving[].custom[]` | array | X | 서비스 고유 지표 `{name, unit, p50…}` — unit 필수, 표준 지표로 표현 가능하면 금지. 해당 서비스 화면(개괄·상세)에 표시, 서비스 간 비교·SLO 불가 (§4) |
+| `serving[].custom[]` | array | X | 서비스 고유 지표 `{name, unit, p50…}` — unit 필수, 값 키는 p50/p90/p95/p99만 허용·**최소 1개 필수**(단일값 지표는 p50 하나로 기입). 표준 지표로 표현 가능하면 금지. 해당 서비스 화면(개괄·상세)에 표시, 서비스 간 비교·SLO 불가 (§4) |
 
 ---
 
@@ -318,6 +319,8 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 ## 4. 성능 메트릭 — 내 케이스 찾기
 
 > **먼저 자기 케이스부터 확인한다.** serving 블록은 **경로 (a) 팀만** 작성한다 — **케이스 A~C(vLLM/SGLang 등)는 URL 제출로 끝이며 serving 블록을 쓰지 않는다** (`"serving": []`). 아래 "serving 블록 작성 가이드"도 경로 (a) 팀만 읽으면 된다.
+>
+> **모델별로 경로가 다른 혼합 서비스**(예: vLLM 모델 + 자체 구현 비스트리밍 모델)는 **모델×경로 단위로 판별**한다 — serving 배열에는 **경로 (a)로 제공하는 모델의 행만** 넣고, 스크랩 대상 모델(A~C)의 행은 넣지 않는다. gpu 블록은 케이스와 무관하게 **자체 GPU 사용분 전부**를 담는다 (§3).
 
 | 케이스 | 담당자 작업 | serving 블록 |
 |---|---|---|
@@ -325,7 +328,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | B. SGLang | 상동 (`--enable-metrics` 필요할 수 있음) | 생략 |
 | C. 기타 Prometheus 엔진 (TGI 등) | 상동 + TTFT/ITL 메트릭명 매핑을 운영자와 확정 | 생략 |
 | D. 자체 구현 서빙 | 작성 가이드대로 로깅·집계 → GET 제공 | 채움 |
-| E. 사외 AI 모델 API 연동 | `gpu: []`. 원하면 게이트웨이에서 측정 (측정 위치를 메타데이터 시트에 명시) | 선택 |
+| E. 사외 AI 모델 API 연동 | `gpu: []`. 원하면 게이트웨이에서 측정 — 측정 위치가 엔진이 아니므로 타 서비스 수치와 단순 비교하지 않음 | 선택 |
 | F. 비스트리밍 | TTFT/ITL 해당 없음 — `e2eMs`(표준)·`custom[]`(선택)으로 작성 (작성 가이드 참조) | 채움 |
 
 - **경로 선택권**: 케이스 A~C 팀도 자체 성능 집계 체계(자체 Prometheus, 로그 기반 집계 등)가 이미 있으면 스크랩 개방 대신 **경로 (a) — serving 블록 직접 제공 — 를 선택할 수 있다.** 단, 이 경우 레플리카 통합 집계와 엔진 재시작 시 유실 처리는 서비스 책임이 된다 (작성 가이드의 케이스 D 주의사항과 동일). 선택 시 메타데이터 시트의 metricsUrl은 null로 제출.
@@ -375,12 +378,12 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 ]
 ```
 
-시간 분할 서빙(주간/야간 모델)·하이브리드도 동일 — gpu 블록의 model별 행 분리와 대칭이며, (date, service, model) JOIN 키로 토큰↔GPU↔성능이 이어진다.
+시간 분할 서빙(주간/야간 모델)·하이브리드도 동일 — gpu 블록의 model별 행 분리와 대칭이며, (date, serviceGroup, service, model) JOIN 키로 토큰↔GPU↔성능이 이어진다.
 
 **비스트리밍·고유 지표 (케이스 F 등)** — TTFT/ITL 대신 serving 블록을 다음으로 채운다:
 
 - `e2eMs` {p50,p90,p95,p99}: **요청 수신 → 응답 완료** 전체 지연 — 비스트리밍의 표준 지표로 **필수** (스트리밍 서비스가 추가로 제공해도 됨)
-- `custom[]`: 표준 지표(TTFT/ITL/TPS/E2E)로 표현되지 않는 서비스 고유 지표 — `{name, unit, p50…}` 구조. **unit 필수**, 표준 지표로 표현 가능한 값은 custom에 넣지 않는다 (비교 가능성 보존)
+- `custom[]`: 표준 지표(TTFT/ITL/TPS/E2E)로 표현되지 않는 서비스 고유 지표 — `{name, unit, p50…}` 구조. **unit 필수**, 값 키는 **p50/p90/p95/p99만 허용하고 최소 1개 필수** (단일값 지표는 p50 하나로 기입 — batchSize 예시 참조). 표준 지표로 표현 가능한 값은 custom에 넣지 않는다 (비교 가능성 보존)
 - custom 지표는 **해당 서비스의 개괄·상세 화면에 표시**된다 — 다만 정의가 서비스마다 달라 **서비스 간 비교·랭킹·SLO 판정에는 쓰지 않는다**
 
 ```json
