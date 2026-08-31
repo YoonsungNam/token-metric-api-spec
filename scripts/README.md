@@ -14,6 +14,9 @@ python3 scripts/check_metrics_api.py --base-url http://... --date 2026-08-18
 
 # 동작 검사(당일·미래·보존초과·형식오류·멱등) 생략하고 스키마만
 python3 scripts/check_metrics_api.py --base-url http://... --skip-behavior
+
+# 실패 시 '고치는 방법' 상세 출력 끄기
+python3 scripts/check_metrics_api.py --base-url http://... --no-fix-guide
 ```
 
 - **종료 코드**: `0` = FAIL 없음 (통과) / `1` = FAIL 있음 / `2` = 인자 오류 — CI 에 그대로 물릴 수 있다.
@@ -81,10 +84,37 @@ $ python3 scripts/check_metrics_api.py --base-url http://broken-svc.internal:808
 [PASS] C5     형식 오류 date(2026-13-99) → 400
 
 결과: PASS 12 · WARN 3 · FAIL 6
-→ FAIL 항목을 수정한 뒤 재실행하세요. 규칙 근거: docs/METRICS_COLLECTION_SPEC.md
+
+────────────────────────────── 고치는 방법 ──────────────────────────────
+
+▍generatedAt 형식 (B3)
+  규칙: 집계 산출 시각을 ISO 8601 + KST 오프셋(+09:00)으로. UTC 'Z' 표기·오프셋 생략 금지.
+  올바른 예: "2026-08-19T01:30:00+09:00"
+  파이썬: datetime.now(timezone(timedelta(hours=9))).isoformat(timespec="seconds")
+
+▍gpuCount·gpuHours 규칙 (B7)
+  규칙: gpuCount = 그날 그 행에 매핑된 **최대 장수** (> 0)
+        gpuHours = 장수 × 매핑·할당 시간의 적분 (≥ 0), 행별 gpuHours ≤ gpuCount × 24
+  자주 하는 실수:
+    - gpuCount 를 평균 장수로 기입 (최대 기준이어야 함)
+    - gpuHours 에 분·초 단위 값이나 다른 날짜·기종 분이 섞임
+  올바른 예: 2장으로 12h + 증설 후 4장으로 12h → gpuCount 4, gpuHours 72.0 (= 2×12 + 4×12)
+
+▍percentile 객체 규칙 (B9)
+  규칙: ttftMs / itlMs / e2eMs 는 {p50, p90, p95, p99} 4키 완비, 각각 0 이상의 숫자,
+        p50 ≤ p90 ≤ p95 ≤ p99 (비감소).
+  비감소 위반의 전형적 원인: **레플리카별 percentile 을 평균·재조합** — percentile 은 합성이 안 된다.
+  고치는 법: 전 레플리카의 요청 로그를 모아 **한 번에** percentile 을 계산한다.
+
+  … (실패한 항목마다 이런 가이드 블록이 이어지고, 그 뒤에 경고(WARN) 항목 가이드가 붙는다)
+
+─────────────────────────────────────────────────────────────────────────
+규칙 전문: docs/METRICS_COLLECTION_SPEC.md · 스키마: token-metric-api.yaml
+
+→ 위 '고치는 방법'대로 수정한 뒤 재실행하세요.
 ```
 
-각 FAIL 의 수정 방법은 아래 [자주 나오는 FAIL](#자주-나오는-fail) 참조. 실제 터미널에서는 PASS/WARN/FAIL 이 색상(초록/노랑/빨강)으로 표시된다.
+실패한 항목마다 **문제·규칙·전형적 원인·올바른 예**가 담긴 가이드 블록이 실행 끝에 자동으로 붙는다 (끄려면 `--no-fix-guide`). 아래 [자주 나오는 FAIL](#자주-나오는-fail)은 그 요약표다. 실제 터미널에서는 PASS/WARN/FAIL 이 색상(초록/노랑/빨강)으로 표시된다.
 
 ## 검사 항목
 
