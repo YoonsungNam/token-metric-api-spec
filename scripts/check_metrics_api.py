@@ -44,7 +44,7 @@ FIX_GUIDES = {
 
     "required-fields": """▍최상위 필수 필드 (B1)
   규칙: date · serviceGroup · service · generatedAt · gpu · serving 6개는 **항상** 포함한다.
-    - serving 은 항상 포함 — GPU 서빙 팀(케이스 A~D·F)은 모델별 행을 채우고, 사외 API 전용만 빈 배열 [] (키 생략·null 불가)
+    - serving 은 항상 포함 — GPU 서빙 팀(케이스 A~D·F)은 모델별 행을 채우고, 사외 API 전용·플랫폼 소비 전용만 빈 배열 [] (키 생략·null 불가)
     - serviceGroup·service 는 메타데이터 시트 공식 표기와 **같은 문자열** (기존 토큰 API 와도 동일 — JOIN 조건)
   올바른 예: {"date":"2026-08-18","serviceGroup":"ds-assistant","service":"ds-assistant-portal",
              "generatedAt":"2026-08-19T01:30:00+09:00","gpu":[...],"serving":[]}""",
@@ -165,7 +165,8 @@ FIX_GUIDES = {
   vLLM/SGLang(케이스 A~C)도 자체 집계 대상이다 (운영자는 개방된 엔진 /metrics 로 교차 검증만 한다).
   산출 힌트(A~C): 엔진 히스토그램의 그날 증가분 버킷에서 percentile 계산 —
     histogram_quantile(0.99, sum by (le, model_name) (increase(vllm:time_to_first_token_seconds_bucket[1d])))
-  사내 플랫폼에서 소비만 하는 모델은 행을 넣지 않는다 (성능은 플랫폼이 제공).""",
+  사내 플랫폼에서 소비만 하는 모델은 행을 넣지 않는다 (성능은 플랫폼이 제공).
+  예외: 그날 요청이 0건이었던 모델은 성능 행을 생략할 수 있다 — 전 모델 0건이면 이 FAIL 은 무시해도 된다.""",
 
     "date-format-400": """▍date 형식 검증 → 400 (C5)
   규칙: date 파라미터를 YYYY-MM-DD 로 파싱 검증하고 실패 시 400 (2026-13-99 같은 값 거부).
@@ -311,7 +312,7 @@ def check_serving_block(serving, present, gpu_serving_models):
         return
     if not serving:
         if gpu_serving_models:
-            report("FAIL", "B10", f"gpu 블록에 serving 행이 있는데 성능 행이 없음 (모델: {sorted(gpu_serving_models)}) — GPU 서빙 팀(케이스 A~D·F)은 serving 작성 필수", fix="serving-empty")
+            report("FAIL", "B10", f"gpu 블록에 serving 행이 있는데 성능 행이 없음 (모델: {sorted(gpu_serving_models)}) — GPU 서빙 팀(케이스 A~D·F)은 serving 작성 필수 (그날 전 모델 요청 0건이었다면 무시 가능)", fix="serving-empty")
         else:
             report("PASS", "B9", "serving: [] (사외 API 전용·플랫폼 소비 전용이면 정상)")
         return
@@ -362,7 +363,7 @@ def check_serving_block(serving, present, gpu_serving_models):
             check_custom(f"{p}.custom", row["custom"])
     missing_models = gpu_serving_models - seen_models
     if missing_models:
-        report("WARN", "B10", f"gpu serving 모델 중 성능 행이 없는 모델: {sorted(missing_models)}", fix="serving-empty")
+        report("WARN", "B10", f"gpu serving 모델 중 성능 행이 없는 모델: {sorted(missing_models)} (그날 요청 0건인 모델이면 정상)", fix="serving-empty")
 
 
 def check_body(body, req_date):

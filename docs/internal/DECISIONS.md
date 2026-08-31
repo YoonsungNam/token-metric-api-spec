@@ -9,7 +9,7 @@
 
 - **목적**: 기존 토큰 API(토큰·requests) 위에 **모델별 GPU Hour + 성능 메트릭(TTFT·ITL·Output TPS)** 을 추가 수집 → 비용·효율·성능을 한 화면에
 - **설계 원칙**: ① 이중 소스 금지 ② 기존 계약 상속(pull, 식별자, 응답 규칙) ③ 담당자 부담 최소(서비스당 GET 1개)
-- **수집 경로**: GET `/v1/metrics` daily pull (`409`로 "0"과 "미확정" 구분) + vLLM/SGLang은 중앙 Prometheus 스크랩(구현 불필요) — 케이스 A~F 가이드
+- **수집 경로**: GET `/v1/metrics` daily pull (`409`로 "0"과 "미확정" 구분) — 성능(serving 블록)은 GPU 서빙 팀 전체가 자체 집계(#23), 엔진 `/metrics` 스크랩은 운영자의 교차 검증 채널 — 케이스 A~F 가이드
 - **비용**: 정본은 **할당**(GPU 대시보드) × 기종 단가. gpu 블록은 할당 비용의 용도 분해(serving/standby/test — 유휴는 중앙 산출). 효율 지표는 serving만 사용
 - **사내 플랫폼 소비**: GPU는 돌리는 쪽만 제공(단일 제공 원칙), 소비자 식별은 공급자 책임(서비스 계정), 배부 키는 가중 토큰(input×1 + output×4), standby·test·유휴는 배부 제외(플랫폼 오버헤드)
 - **모델명 정규화**: canonical + alias. "다르게 불리는 같은 것은 합치고, 같게 불리는 다른 것은 나눈다." 판단 3문항(웨이트/순정/정밀도), `-ft-{용도}` 필수 분리, 애매하면 나눔
@@ -45,7 +45,7 @@
 ## 3. 2단계로 미뤄둔 것
 
 - chargeback(실제 정산) 여부 협의, user → 조직 rollup 뷰
-- 피크 지표(peakHourRequests, peakGpuCount 등) — *(E2E 지연과 경로 (a) serving 블록은 #16·#19로 1단계에 편입됨)*
+- 피크 지표(peakHourRequests, peakGpuCount 등) — *(E2E 지연과 serving 블록 제공 의무는 #19·#23으로 1단계에 편입됨)*
 - **품질 축**: 사내 평가셋/공개 지수 인용(suite 버전 관리), 비용×품질 프런티어 차트, outcome 자기신고 필드(showback 참고용 한정)
 - `backfill` category (학습 백필 구분)
 - 하루 내 스케일 곡선 — 담당자 보고가 아닌 중앙 스크랩(k8s/GPU 대시보드)으로
@@ -54,4 +54,4 @@
 
 ## 4. 담당자 관점 한 줄 요약
 
-**엑셀 양식 1회 제출 + GET `/v1/metrics` 1개 구현**(vLLM/SGLang은 URL 제출 + 네트워크 개방만)이 전부이며, 이후에는 중앙 알림에 반응만 하면 되는 구조.
+**엑셀 양식 1회 제출 + GET `/v1/metrics` 1개 구현**(GPU 서빙 팀은 serving 블록 자체 집계 포함 — A~C는 엔진 히스토그램 활용 가능하고, 추가로 검증용 `/metrics` URL 제출·개방)이 전부이며, 이후에는 운영자 알림에 반응만 하면 되는 구조.

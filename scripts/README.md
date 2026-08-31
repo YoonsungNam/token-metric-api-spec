@@ -70,7 +70,7 @@ $ python3 scripts/check_metrics_api.py --base-url http://broken-svc.internal:808
 [PASS] B4     gpu 배열 확인 (1행)
 [FAIL] B6     gpu[0]: category=serving 에서 model "unknown" 금지 (test 만 허용)
 [FAIL] B7     gpu[0]: gpuHours(120.0) > gpuCount×24(96) — 검증 규칙 위반
-[PASS] B9     serving 배열 확인 (1행) — 경로 (a)
+[PASS] B9     serving 배열 확인 (1행) — 모델별 성능
 [FAIL] B9     serving[0].ttftMs percentile 이 비감소가 아님 (p50≤p90≤p95≤p99 여야 함): [900, 640, 850, 1450]
 [WARN] B10    serving[0]: ttftMs/itlMs 중 하나만 있음 — 스트리밍 모델은 쌍으로 제공
 [FAIL] B9     serving[0].outputTps 에 허용되지 않은 키 ['avg'] — p50만 허용 (avg·상위 percentile 없음)

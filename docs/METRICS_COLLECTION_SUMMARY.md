@@ -73,7 +73,7 @@ model × gpuType × category 단위 행으로 일별 제공:
 
 ## 8. 성능 메트릭 — 내 케이스 찾기
 
-**자체 GPU 서빙 팀 전체(케이스 A~D·F)가 serving 블록을 작성한다** — 사외 API 전용(E)만 선택. Prometheus 엔진 팀은 추가로 검증용 `/metrics`를 개방한다.
+**자체 GPU 서빙 팀 전체(케이스 A~D·F)가 serving 블록을 작성한다** — 사외 API 전용(E)만 선택. Prometheus 엔진 팀은 추가로 검증용 `/metrics`를 개방한다. 자체 GPU 없이 사내 플랫폼만 소비하는 서비스는 `gpu: []`·`serving: []`.
 
 | 케이스 | 담당자 작업 | serving 블록 |
 |---|---|---|
@@ -116,5 +116,5 @@ model × gpuType × category 단위 행으로 일별 제공:
 - [ ] 메타데이터 시트 제출 — 모델 전부(canonical+alias+paramsB), `gpuDashboardUnits`(infraType/workgroup/unit), consumes, owner
 - [ ] gpu 블록: serving/standby/test 분류·제공 가능한가? (유휴 불필요, serving·standby에 unknown 금지)
 - [ ] 내 케이스(A~F) 판별 + `engine` 자기신고 포함?
-- [ ] (A~C) VIP 제출 + 방화벽 개방 / (D·F) 측정·집계 가능? / (플랫폼) 계정↔서비스 매핑?
+- [ ] (GPU 서빙 팀 A~D·F) serving 블록 자체 집계·제공 가능? (A~C는 엔진 히스토그램 활용) / (A~C) 검증용 VIP 제출 + 방화벽 개방 / (플랫폼) 키 발급 시 소비 서비스 표기 기록?
 - [ ] `/v1/metrics`를 02:00 이전 확정 상태로 제공 가능한가?
