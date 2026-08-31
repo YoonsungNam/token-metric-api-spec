@@ -9,6 +9,4 @@
 - 📊 메타데이터 시트 양식: [docs/METADATA_SHEET_TEMPLATE.xlsx](docs/METADATA_SHEET_TEMPLATE.xlsx)
 - 📝 의사결정 로그: [docs/internal/DECISIONS.md](docs/internal/DECISIONS.md)
 - 🔧 수집기 설계 (운영자용): [docs/internal/COLLECTOR_DESIGN.md](docs/internal/COLLECTOR_DESIGN.md)
-- 📚 상세 정의서 (old — 배경·대시보드 설계·배부 규칙 포함): [docs/internal/METRICS_COLLECTION_SPEC_OLD.md](docs/internal/METRICS_COLLECTION_SPEC_OLD.md)
 - 관련 스펙: [token-usage-api-spec](https://github.com/YoonsungNam/token-usage-api-spec) (기존 토큰 사용량 조회 API)
-- 상태: 초안 (담당자 협의용)

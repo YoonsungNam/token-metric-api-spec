@@ -1,6 +1,6 @@
 # 의사결정 로그 (Decision Log)
 
-> 스펙 수립 과정에서 논의·확정된 사항의 기록. 규칙의 정본은 [구현 스펙](../METRICS_COLLECTION_SPEC.md), 전체 맥락은 [상세 정의서(old)](METRICS_COLLECTION_SPEC_OLD.md) 참조.
+> 스펙 수립 과정에서 논의·확정된 사항의 기록. 규칙의 정본은 [구현 스펙](../METRICS_COLLECTION_SPEC.md) 참조.
 > 최종 갱신: 2026-08-31
 
 ---
