@@ -42,7 +42,7 @@
   │   같은 start_time → delta = new − last
   │   새 start_time   → 새 세대 시작, delta = new (0부터 다시 센 분량)
   ▼
-[DB: 분 단위 델타 적재 · 7일 보관]  ← backfill 창(7일)과 일치, daily 재계산 멱등
+[DB: 분 단위 델타 적재 · 14일 보관]  ← backfill 창(14일)과 일치, daily 재계산 멱등
   ▼
 [daily 배치] Σ델타 → 전 스트림 버킷 합산 → percentile 보간 1회
   ▼

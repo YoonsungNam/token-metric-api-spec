@@ -141,7 +141,7 @@ FIX_GUIDES = {
 
     "status-code": """▍상태 코드 규칙 (§2 응답 규칙)
   /v1/metrics 가 쓰는 코드는 4개뿐:
-    200 확정 데이터 (실제 0 이면 200 + gpu: []) · 409 집계 전 미확정 · 400 당일/미래/형식 오류 · 404 보존(7일) 초과
+    200 확정 데이터 (실제 0 이면 200 + gpu: []) · 409 집계 전 미확정 · 400 당일/미래/형식 오류 · 404 보존(14일) 초과
   과거 유효 날짜에 400 이 나오면: date 파서가 KST(+09:00) 기준인지, 타임존 차이로 하루 밀리지 않는지 확인.""",
 
     "today-future-400": """▍당일·미래 date → 400 (C1/C2)
@@ -151,8 +151,8 @@ FIX_GUIDES = {
         오늘 판정은 반드시 KST(+09:00) 기준 — 서버가 UTC 면 하루 밀린다.""",
 
     "retention-404": """▍보존 기간 초과 → 404 (C3)
-  규칙: 최근 7일 밖의 date 는 404 {"code": "data_not_retained", ...}.
-  7일 이내는 재수집(backfill) 대상이므로 조회 가능해야 한다 — 7일보다 짧게 지우면 정정 재수집이 실패한다.""",
+  규칙: 최근 14일 밖의 date 는 404 {"code": "data_not_retained", ...}.
+  14일 이내는 재수집(backfill) 대상이므로 조회 가능해야 한다 — 14일보다 짧게 지우면 정정 재수집이 실패한다.""",
 
     "idempotency": """▍같은 date 재호출 = 같은 응답 (C4)
   규칙: 확정된 일자는 언제 다시 호출해도 같은 본문을 반환한다 (운영자 재수집 안전의 전제).
@@ -435,7 +435,7 @@ def behavior_checks(base_url, timeout):
     if status == 404:
         report("PASS", "C3", f"보존 기간 초과 date({old}) → 404")
     elif status == 200:
-        report("WARN", "C3", f"30일 전 date 가 200 — 보존을 7일보다 길게 제공 중 (스펙상 초과분은 404)", fix="retention-404")
+        report("WARN", "C3", f"30일 전 date 가 200 — 보존을 14일보다 길게 제공 중 (스펙상 초과분은 404)", fix="retention-404")
     elif status is None:
         report("FAIL", "C3", f"과거 date 호출 실패: {body}", fix="conn")
     else:
