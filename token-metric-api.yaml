@@ -452,16 +452,6 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Engine'
             - type: 'null'
-        serviceAccounts:
-          type: object
-          description: |
-            (사내 플랫폼 제공자만, 선택) 발급한 서비스 계정(API 키) ↔ 소비 서비스 매핑 자기신고.
-            메타데이터 시트 [5] 를 대체할 수 있다.
-          additionalProperties:
-            type: string
-            description: 소비 서비스의 `service` 표기
-          examples:
-            - { svc-key-a1: hr-chatbot }
         gpu:
           type: array
           description: 모델별 GPU Hour 행 목록. 사용·가동이 실제 0 이거나 사내 GPU 가 없으면 빈 배열.

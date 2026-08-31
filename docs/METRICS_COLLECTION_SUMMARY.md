@@ -48,10 +48,9 @@
 |---|---|---|
 | [1] | 서비스 표기 | serviceGroup·service·담당자(owner — 알림 수신 주소) |
 | [2] | 모델 표기 | **쓰는 모델 전부** (자체 서빙 + 사내 플랫폼 경유 + 사외 AI 모델 API). canonical 정의(alias·family·paramsB)는 서빙 주체만, 플랫폼 경유 모델은 이름만 참조 |
-| [3] | GPU 할당 매핑 (`gpuDashboardUnits`) | GPU 대시보드 할당 unit의 **프리픽스 목록** (`인프라유형:워크그룹:unit이름`) — 워크그룹 수준 권장(하위 unit 자동 포함), 공유 워크그룹만 unit 수준 |
+| [3] | GPU 할당 매핑 (`gpuDashboardUnits`) | GPU 대시보드 할당 unit 목록 — 항목당 `infraType`·`workgroup`·`unit`(선택). **unit 비우면 워크그룹 전체**(하위 unit 자동 포함, 권장), 공유 워크그룹만 unit 지정 |
 | [4] | 소비 관계 (`consumes`) | models 중 외부 조달 모델의 출처: `{model, provider, type: internal/external}` — **없는 모델 = 자체 서빙** |
-| [5] | 서비스 계정 매핑 | (플랫폼 제공자만) 발급 API 키 ↔ 소비 서비스 |
-| [6] | `/metrics` URL | (케이스 A~C만) 스크랩 VIP + 엔진 종류 — 버전은 API 자기신고 |
+| [5] | `/metrics` URL | (케이스 A~C만) 스크랩 VIP + 엔진 종류 — 버전은 API 자기신고 |
 
 ## 6. gpu 블록 — 모델별 GPU Hour
 
@@ -68,7 +67,7 @@ model × gpuType × category 단위 행으로 일별 제공:
 ## 7. 사내 플랫폼을 쓰거나 제공하는 경우
 
 - **GPU Hour는 돌리는 쪽만 제공** (단일 제공 원칙) — 소비자는 플랫폼 사용분의 GPU·토큰을 **제공하지 않음** (이중 계상 차단), 시트에 consumes만 등록
-- **소비자 식별은 공급자 책임** — 소비 서비스별 API 키(서비스 계정) 발급 + 매핑 제출
+- **소비자 식별은 공급자 책임** — API 키 **발급 시 소비 서비스의 `service` 표기를 받아 기록**하고, 사용량 제공 시 그 표기로 소비자 호출분을 구분 (키 매핑 제출 없음)
 - 배부: 공급자의 모델별 serving 비용을 가중 토큰(input×1+output×4) 비율로 소비자에 귀속. standby·test·유휴는 배부하지 않음(플랫폼 오버헤드)
 
 ## 8. 성능 메트릭 — 내 케이스 찾기
@@ -113,7 +112,7 @@ model × gpuType × category 단위 행으로 일별 제공:
 ## 12. 담당자 체크리스트
 
 - [ ] (serviceGroup, service, model) 공식 표기 — 기존 토큰 API와 동일한가?
-- [ ] 메타데이터 시트 제출 — 모델 전부(canonical+alias+paramsB), `gpuDashboardUnits` 프리픽스, consumes, owner
+- [ ] 메타데이터 시트 제출 — 모델 전부(canonical+alias+paramsB), `gpuDashboardUnits`(infraType/workgroup/unit), consumes, owner
 - [ ] gpu 블록: serving/standby/test 분류·제공 가능한가? (유휴 불필요, serving·standby에 unknown 금지)
 - [ ] 내 케이스(A~F) 판별 + `engine` 자기신고 포함?
 - [ ] (A~C) VIP 제출 + 방화벽 개방 / (D·F) 측정·집계 가능? / (플랫폼) 계정↔서비스 매핑?

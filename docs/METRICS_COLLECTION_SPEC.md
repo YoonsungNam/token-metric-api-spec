@@ -35,7 +35,7 @@
 
 **메타데이터 시트란?** 서비스의 기준 정보 — 식별자 표기, 모델 이름(canonical·alias), GPU 할당 매핑, 소비 관계, 담당자 연락처 — 를 **엑셀 양식으로 수기 제출·관리하는 문서**다. 운영자는 이 시트를 정본으로 삼아 모델명 정규화, 토큰↔GPU↔성능 데이터 JOIN, 검증, 알림 발송을 수행한다. (1단계는 시스템 없이 엑셀로 운영하고, 추후 등록 화면 전환을 검토한다.)
 
-**양식 파일**: [METADATA_SHEET_TEMPLATE.xlsx](METADATA_SHEET_TEMPLATE.xlsx) — 아래 항목 [1]~[6]이 시트로 나뉘어 있고 예시가 채워져 있다 (예시 행은 삭제 후 작성).
+**양식 파일**: [METADATA_SHEET_TEMPLATE.xlsx](METADATA_SHEET_TEMPLATE.xlsx) — 아래 항목 [1]~[5]가 시트로 나뉘어 있고 예시가 채워져 있다 (예시 행은 삭제 후 작성).
 
 **제출 항목 6가지**:
 
@@ -43,12 +43,11 @@
 |---|---|---|
 | [1] | 서비스 표기 | serviceGroup · service · 담당자 — **기존 토큰 API와 같은 문자열** (`ds-assistant` ≠ `DS-Assistant`) |
 | [2] | 모델 표기 | 서비스가 **사용하는 모든 모델** — 자체 서빙, 사내 플랫폼 경유, 사외 AI 모델 API 직접 호출 전부. canonical 정의(alias·family·파라미터 수)는 **서빙 주체가 등재** — 사내 플랫폼 경유 모델은 이름만 참조로 적는다 |
-| [3] | GPU 할당 매핑 (`gpuDashboardUnits`) | **GPU 대시보드에서 우리 서비스의 할당 unit들을 가리키는 프리픽스 목록** — 운영자가 이걸로 할당량(고정 쿼터)을 조회한다. 계층 `인프라유형:워크그룹:unit이름`의 어느 수준에서든 끊어 적을 수 있고, **프리픽스 아래 모든 unit이 자동 포함**된다 (unit이 생기고 없어져도 시트 갱신 불필요). **워크그룹 수준 권장**(예: `ai-platform:ds-assistant`), 워크그룹을 타 서비스와 공유할 때만 unit 수준까지 지정. 프리픽스가 겹치면 긴(구체적) 쪽 우선, 같은 unit이 두 서비스에 매핑되면 검증 알림 — unit 하나는 결과적으로 service 하나에만 귀속. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
+| [3] | GPU 할당 매핑 (`gpuDashboardUnits`) | **GPU 대시보드에서 우리 서비스의 할당 unit들을 가리키는 목록** — 운영자가 이걸로 할당량(고정 쿼터)을 조회한다. 각 항목은 `infraType`(인프라유형)·`workgroup`(워크그룹)·`unit`(선택) 세 필드 — **unit을 비우면 그 워크그룹의 모든 unit이 자동 포함**된다 (unit이 생기고 없어져도 시트 갱신 불필요). **워크그룹 수준 권장**, 워크그룹을 타 서비스와 공유할 때만 unit까지 지정. unit 지정 항목이 워크그룹 항목보다 우선하고, 같은 unit이 두 서비스에 매핑되면 검증 알림 — unit 하나는 결과적으로 service 하나에만 귀속. **일별 gpuHours를 적는 곳이 아님** (그건 API의 gpu 블록, §3) |
 | [4] | 소비 관계 (consumes) | **models 중 외부에서 조달하는 모델의 출처** — 어떤 모델을 어떤 사내 플랫폼(다른 팀이 사내 GPU로 제공하는 LLM API) / 사외 AI 모델 API에서 쓰는지. **consumes에 없는 모델 = 자체 GPU 서빙** |
-| [5] | 서비스 계정 매핑 | (플랫폼 제공자만) 서비스 계정 ↔ 소비 서비스 |
-| [6] | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
+| [5] | `/metrics` URL | (케이스 A~C만) 스크랩 URL + 엔진 종류 |
 
-**작성 예시 — 서비스 유형별 3가지** (주석의 [1]~[6]은 위 표의 항목 번호):
+**작성 예시 — 서비스 유형별 3가지** (주석의 [1]~[5]는 위 표의 항목 번호):
 
 *유형 1 — LLM API만 쓰는 서비스 (자체 GPU 없음)*: 사내 플랫폼과 사외 AI 모델 API를 호출하는 챗봇
 
@@ -70,8 +69,7 @@ consumes:                                     # [4] models 중 외부 조달 모
   - model: llama3.3-70b
     provider: ds-assistant-portal
     type: internal                            #    internal = 사내 플랫폼
-serviceAccounts: {}                           # [5] 플랫폼 제공자가 아니므로 비움
-metricsUrl: null                              # [6] 스크랩 대상 없음 (§4 케이스 E)
+metricsUrl: null                              # [5] 스크랩 대상 없음 (§4 케이스 E)
 engine: null
 ```
 
@@ -86,17 +84,18 @@ models:                                       # [2] 위 "작성 과정 예시"�
     family: llama3.3
     paramsB: 70
     aliases: ["meta-llama/Llama-3.3-70B-Instruct", "llama70b", "/models/llama33"]
-gpuDashboardUnits:                            # [3] 할당 unit 프리픽스 목록 — 프리픽스 아래 unit 자동 포함
-  - "ai-platform:ds-assistant"                #     워크그룹 수준 (권장): dsllm-model-high 등 하위 unit 전부 포함
-  - "ds-cloud:ds-assistant-batch"             #     워크그룹이 여러 개면 나열 — 인프라유형이 달라도 됨
+gpuDashboardUnits:                            # [3] 할당 unit 목록 — unit 비우면 워크그룹 전체 (하위 unit 자동 포함)
+  - infraType: ai-platform                    #     워크그룹 수준 (권장): dsllm-model-high 등 하위 unit 전부 포함
+    workgroup: ds-assistant
+  - infraType: ds-cloud                       #     워크그룹이 여러 개면 나열 — 인프라유형이 달라도 됨
+    workgroup: ds-assistant-batch
 consumes: []                                  # [4] 비어 있음 = 전 모델 자체 서빙
-serviceAccounts:                              # [5] 플랫폼 제공자만 — 발급한 API 키 ↔ 소비 서비스
-  svc-key-a1: hr-chatbot
-  svc-key-b2: doc-summary
-metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # [6] §4 케이스 A — 이것으로 serving 블록 생략
-engine:                                       # [6] 버전은 API 자기신고로 수신 — 수기 갱신 불필요
+metricsUrl: "http://ds-assistant-vllm.internal:8000/metrics"   # [5] §4 케이스 A — 이것으로 serving 블록 생략
+engine:                                       # [5] 버전은 API 자기신고로 수신 — 수기 갱신 불필요
   type: vllm
 ```
+
+- 플랫폼 **제공자**의 소비자 식별: API 키 매핑을 제출하지 않는다 — **키 발급 시 소비 서비스의 `service` 표기를 받아 기록**하고, 토큰 사용량 제공 시 소비자 호출분을 그 표기로 구분한다 (미등록 표기가 유입되면 알림 폐루프로 잡힘).
 
 *유형 3 — GPU + LLM API 병행 (하이브리드)*: 일반 요청은 자체 GPU의 중형 모델, 대형 요청은 사내 플랫폼으로
 
@@ -111,13 +110,14 @@ models:                                       # [2] 쓰는 모델 전부
     aliases: ["Qwen/Qwen3-32B"]
   - canonical: llama3.3-70b                   #    사내 플랫폼 경유 — 이름만 참조
 gpuDashboardUnits:                            # [3] 공유 워크그룹: search-team 안에 타 서비스(search-ranker 등)의
-  - "ds-cloud:search-team:doc-summary-prod"   #     unit도 있음 → 워크그룹 수준으로 적으면 남의 unit까지 삼키므로 우리 unit만 지정
+  - infraType: ds-cloud                       #     unit도 있음 → 워크그룹만 적으면 남의 unit까지 삼키므로 unit까지 지정
+    workgroup: search-team
+    unit: doc-summary-prod
 consumes:                                     # [4] llama3.3-70b만 외부 조달 (qwen3-32b는 자체 서빙) — 이 사용분은 gpu 블록에 쓰지 않음 (§3)
   - model: llama3.3-70b
     provider: ds-assistant-portal
     type: internal
-serviceAccounts: {}
-metricsUrl: null                              # [6] 자체 구현 서빙 (§4 케이스 D) — serving 블록 직접 채움
+metricsUrl: null                              # [5] 자체 구현 서빙 (§4 케이스 D) — serving 블록 직접 채움
 engine:
   type: custom
 ```
@@ -137,12 +137,14 @@ engine:
 | `models[].paramsB` | number / null | 정의 주체만 | **총 파라미터 수 (단위: B)** — 메모리 점유(GPU 장수·비용)의 근거. 파라미터 비공개 사외 모델은 null | `70` |
 | `models[].activeParamsB` | number | MoE만 | MoE의 **활성 파라미터 수 (단위: B)** — 토큰당 연산량(속도)의 근거. dense 모델은 생략 | `22` |
 | `models[].aliases` | string[] | 정의 주체만 | 실데이터에 등장하는 다른 표기 전부 — 운영자 정규화의 사전 | `["meta-llama/Llama-3.3-70B-Instruct", "llama70b"]` |
-| `gpuDashboardUnits` | string[] | O (없으면 `[]`) | GPU 대시보드 할당 unit **프리픽스 목록** — `인프라유형:워크그룹:unit이름` 계층의 어느 수준이든 가능, 프리픽스 아래 unit 자동 포함. 워크그룹 수준 권장, 공유 시에만 unit 수준. 긴 프리픽스 우선 | `["ai-platform:ds-assistant"]` |
+| `gpuDashboardUnits[]` | array | O (없으면 `[]`) | GPU 대시보드 할당 unit 목록 — 항목 아래 unit 자동 포함(생성·소멸 시 시트 갱신 불필요). unit 지정 항목이 워크그룹 항목보다 우선, 동일 unit 이중 매핑은 검증 알림 | 유형 2·3 예시 참조 |
+| `gpuDashboardUnits[].infraType` | string | O | GPU가 올라간 인프라 유형 | `ai-platform` |
+| `gpuDashboardUnits[].workgroup` | string | O | GPU 대시보드의 워크그룹 이름 | `ds-assistant` |
+| `gpuDashboardUnits[].unit` | string | 공유 워크그룹만 | unit 이름 — **비우면 워크그룹 전체** (권장) | `doc-summary-prod` |
 | `consumes[]` | array | O (없으면 `[]`) | models 중 **외부 조달 모델의 출처** — 여기 없는 모델 = 자체 GPU 서빙 | 유형 1·3 예시 참조 |
 | `consumes[].model` | string | O | models에 등재된 canonical | `llama3.3-70b` |
 | `consumes[].provider` | string | O | 조달처 — 사내 플랫폼이면 그 서비스의 `service` 표기, 사외면 API 제공사 표기 | `ds-assistant-portal` (사내) / `anthropic-api` (사외) |
 | `consumes[].type` | `internal`/`external` | O | internal = 사내 플랫폼, external = 사외 AI 모델 API | `internal` |
-| `serviceAccounts` | object / `{}` | 플랫폼 제공자만 | 발급한 API 키(서비스 계정) ↔ 소비 서비스 매핑 — 소비자 식별의 근거 | `svc-key-a1: hr-chatbot` |
 | `metricsUrl` | string / null | 케이스 A~C만 | 운영자측 Prometheus가 스크랩할 `/metrics` URL | `http://ds-assistant-vllm.internal:8000/metrics` |
 | `engine` | object {type} / null | 권장 | 추론 엔진 종류 (`vllm`/`sglang`/`custom` 등) — 버전은 API 자기신고로 수신 | `type: vllm` |
 
@@ -183,7 +185,7 @@ engine:
 **제출 후 운영 — 갱신은 알림 기반 (기억할 필요 없음)**:
 
 - 미등록 모델 표기가 데이터에 나타나면 운영자가 후보와 함께 알림 → **"기존 ○○의 alias" / "새 모델" 중 택일 회신**하면 끝 (사전 갱신 후 7일 내 소급 재처리. 날짜 접미 패턴은 자동 처리, 무응답 시 "미등록"으로 계속 표시)
-- 엔진 교체·검증 위반도 운영자가 감지해 알림. GPU 대시보드에 **어느 프리픽스에도 안 걸리는 unit**이 나타나면 "미매핑 unit"으로 알림 (미등록 모델과 같은 폐루프)
+- 엔진 교체·검증 위반도 운영자가 감지해 알림. GPU 대시보드에 **어느 매핑에도 안 걸리는 unit**이 나타나면 "미매핑 unit"으로 알림 (미등록 모델과 같은 폐루프)
 - **알림 채널**: 메타데이터 시트 [1]에 등록된 담당자(owner) 앞으로 사내 메신저·메일 발송 (채널 상세는 온보딩 안내 시 확정) — **owner가 바뀌면 메타데이터 시트 갱신 필수**
 
 ---
@@ -269,7 +271,6 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | `serviceGroup` / `service` | string | O | 메타데이터 시트 공식 표기와 일치 |
 | `generatedAt` | string (ISO 8601, +09:00) | O | 집계 산출 시각 |
 | `engine` | object {type, version?} | X (권장) | 엔진 자기신고 |
-| `serviceAccounts` | object | X | 플랫폼만: 계정 ↔ 소비 서비스 매핑 자기신고 |
 | `gpu[]` | array | O (빈 배열 허용) | §3 |
 | `gpu[].model` | string | O | canonical 표기 (`unknown`은 test만) |
 | `gpu[].gpuType` | string | O | 단순 기종 표기 (`H100`, `A100`) |
@@ -415,5 +416,5 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 - [ ] (케이스 A~C) `/metrics` URL 제출 + 운영자측 Prometheus 접근 개방 가능한가?
 - [ ] (케이스 D) 시각 3종 로깅 + 레플리카 통합 집계 가능한가?
 - [ ] `/v1/metrics`를 02:00 이전에 전일 확정 상태로 제공 가능한가?
-- [ ] (플랫폼 제공자) 소비 서비스별 API 키 발급 + 계정↔서비스 매핑 제출했는가?
+- [ ] (플랫폼 제공자) API 키 발급 시 소비 서비스의 `service` 표기를 받아 기록하고, 토큰 사용량에서 소비자 호출분을 그 표기로 구분 가능한가?
 - [ ] (사내 플랫폼 소비자) consumes(모델 출처) 제출 + 그 사용분의 GPU·토큰을 보내지 않는다는 것을 인지했는가?
