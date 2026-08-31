@@ -426,7 +426,7 @@ components:
     MetricsReport:
       type: object
       description: 일자별 메트릭 응답 본문
-      required: [date, serviceGroup, service, generatedAt, gpu]
+      required: [date, serviceGroup, service, generatedAt, gpu, serving]
       properties:
         date:
           type: string
@@ -463,8 +463,7 @@ components:
           type: array
           description: |
             성능 메트릭 행 목록 — **경로 (a) 팀만 채운다.**
-            케이스 A~C(vLLM/SGLang 등 운영자 스크랩)는 빈 배열로 응답한다.
-          default: []
+            케이스 A~C(vLLM/SGLang 등 운영자 스크랩)는 빈 배열로 응답한다 (키 생략 불가).
           items:
             $ref: '#/components/schemas/ServingRecord'
 

@@ -4,6 +4,7 @@
 
 - 📄 구현 스펙 (서비스 담당자용): [docs/METRICS_COLLECTION_SPEC.md](docs/METRICS_COLLECTION_SPEC.md)
 - 🧾 OpenAPI 계약: [token-metric-api.yaml](token-metric-api.yaml) (OpenAPI 3.1)
+- ✅ 구현 자가 검사: [scripts/check_metrics_api.py](scripts/check_metrics_api.py) ([사용법·검사 항목](scripts/README.md))
 - 📋 담당자 요약 (미팅용): [docs/METRICS_COLLECTION_SUMMARY.md](docs/METRICS_COLLECTION_SUMMARY.md)
 - 📊 메타데이터 시트 양식: [docs/METADATA_SHEET_TEMPLATE.xlsx](docs/METADATA_SHEET_TEMPLATE.xlsx)
 - 📝 의사결정 로그: [docs/internal/DECISIONS.md](docs/internal/DECISIONS.md)
