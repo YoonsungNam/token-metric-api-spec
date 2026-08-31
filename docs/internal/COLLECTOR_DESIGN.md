@@ -1,7 +1,7 @@
 # 성능 메트릭 수집기 설계 (운영자 내부)
 
 > 대상: 대시보드 운영자 · 경로 (b)(케이스 A~C) 스크랩 수집기의 내부 설계
-> 서비스 담당자 계약([구현 스펙](METRICS_COLLECTION_SPEC.md))에는 영향 없음 — 담당자 요구사항은 "metricsUrl(VIP) 제출 + 방화벽 개방" 그대로다.
+> 서비스 담당자 계약([구현 스펙](../METRICS_COLLECTION_SPEC.md))에는 영향 없음 — 담당자 요구사항은 "metricsUrl(VIP) 제출 + 방화벽 개방" 그대로다.
 > 관련 결정: [DECISIONS #16](DECISIONS.md)
 
 ---

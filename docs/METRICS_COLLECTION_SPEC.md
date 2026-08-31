@@ -1,7 +1,7 @@
 # /v1/metrics 구현 스펙 — 서비스 담당자용
 
 > 대상: 각 AI 서비스 담당자 · **해야 할 일 + 상황별 예시** 중심
-> 설계 배경·근거: [상세 정의서(old)](METRICS_COLLECTION_SPEC_OLD.md) · [의사결정 로그](DECISIONS.md) · [미팅용 요약](METRICS_COLLECTION_SUMMARY.md)
+> 설계 배경·근거: [상세 정의서(old)](internal/METRICS_COLLECTION_SPEC_OLD.md) · [의사결정 로그](internal/DECISIONS.md) · [미팅용 요약](METRICS_COLLECTION_SUMMARY.md)
 > 관련 스펙: [token-usage-api-spec](https://github.com/YoonsungNam/token-usage-api-spec)
 
 ---

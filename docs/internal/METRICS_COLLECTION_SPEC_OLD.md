@@ -2,10 +2,10 @@
 
 > 대상 독자: 각 AI 서비스 담당자 및 토큰 대시보드 개발팀
 > 관련 스펙: [token-usage-api-spec](https://github.com/YoonsungNam/token-usage-api-spec) (기존 토큰 사용량 조회 API)
-> 관련 문서: [담당자 요약 (미팅용)](METRICS_COLLECTION_SUMMARY.md)
+> 관련 문서: [담당자 요약 (미팅용)](../METRICS_COLLECTION_SUMMARY.md)
 > 상태: 초안 v2.1 (담당자 협의용) — v2: 미팅 요약본 확정 사항 반영 (엑셀 취합, `gpuCount`, gpuType 단순 표기, GPU Hour 정의, 일정) · v2.1: 모델 체급(sizeClass)·채택도 지표·unknown 규칙 강화
 >
-> ⚠️ **이 문서는 전체 상세본의 보존본(old)입니다.** 배경·대시보드 설계·비용 배부 규칙까지 포함한 전체 맥락용 문서이며, **서비스 담당자의 구현은 간소화 스펙 [METRICS_COLLECTION_SPEC.md](METRICS_COLLECTION_SPEC.md)를 따릅니다.**
+> ⚠️ **이 문서는 전체 상세본의 보존본(old)입니다.** 배경·대시보드 설계·비용 배부 규칙까지 포함한 전체 맥락용 문서이며, **서비스 담당자의 구현은 간소화 스펙 [METRICS_COLLECTION_SPEC.md](../METRICS_COLLECTION_SPEC.md)를 따릅니다.**
 
 ---
 
