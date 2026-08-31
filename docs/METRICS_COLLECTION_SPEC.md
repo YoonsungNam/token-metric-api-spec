@@ -278,8 +278,8 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | `serving[].model` | string | O | |
 | `serving[].ttftMs` / `itlMs` | object {p50,p90,p95,p99} | X | ms |
 | `serving[].outputTps` | object {p50} | X | tokens/s — avg 없음(비율 평균은 왜곡, 총 처리량은 토큰 API에서 파생). 느린 쪽 꼬리는 ITL p99가 담당 |
-| `serving[].e2eMs` | object {p50,p90,p95,p99} | X | 요청 수신 → 응답 완료 지연 (ms) — 비스트리밍(케이스 F) 권장 |
-| `serving[].custom[]` | array | X | 서비스 고유 지표 `{name, unit, p50…}` — unit 필수, 표준 지표로 표현 가능하면 금지. 서비스 상세에만 표시 (§4) |
+| `serving[].e2eMs` | object {p50,p90,p95,p99} | 케이스 F 필수 | 요청 수신 → 응답 완료 지연 (ms) — 스트리밍 서비스는 선택 |
+| `serving[].custom[]` | array | X | 서비스 고유 지표 `{name, unit, p50…}` — unit 필수, 표준 지표로 표현 가능하면 금지. 해당 서비스 화면(개괄·상세)에 표시, 서비스 간 비교·SLO 불가 (§4) |
 
 ---
 
@@ -323,7 +323,7 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 | C. 기타 Prometheus 엔진 (TGI 등) | 상동 + TTFT/ITL 메트릭명 매핑을 운영자와 확정 | 생략 |
 | D. 자체 구현 서빙 | 작성 가이드대로 로깅·집계 → GET 제공 | 채움 |
 | E. 사외 AI 모델 API 연동 | `gpu: []`. 원하면 게이트웨이에서 측정 (측정 위치를 메타데이터 시트에 명시) | 선택 |
-| F. 비스트리밍 | TTFT/ITL 해당 없음 — 대신 `e2eMs`(권장)·`custom[]`(선택) 제공 가능 (작성 가이드 참조) | 선택 |
+| F. 비스트리밍 | TTFT/ITL 해당 없음 — `e2eMs`(표준)·`custom[]`(선택)으로 작성 (작성 가이드 참조) | 채움 |
 
 - **경로 선택권**: 케이스 A~C 팀도 자체 성능 집계 체계(자체 Prometheus, 로그 기반 집계 등)가 이미 있으면 스크랩 개방 대신 **경로 (a) — serving 블록 직접 제공 — 를 선택할 수 있다.** 단, 이 경우 레플리카 통합 집계와 엔진 재시작 시 유실 처리는 서비스 책임이 된다 (작성 가이드의 케이스 D 주의사항과 동일). 선택 시 메타데이터 시트의 metricsUrl은 null로 제출.
 
@@ -374,11 +374,11 @@ GET https://{service-host}/v1/metrics?date=YYYY-MM-DD    (KST 기준, 사내망 
 
 시간 분할 서빙(주간/야간 모델)·하이브리드도 동일 — gpu 블록의 model별 행 분리와 대칭이며, (date, service, model) JOIN 키로 토큰↔GPU↔성능이 이어진다.
 
-**비스트리밍·고유 지표 (케이스 F 등)** — serving 블록을 생략하는 대신 다음을 제공할 수 있다:
+**비스트리밍·고유 지표 (케이스 F 등)** — TTFT/ITL 대신 serving 블록을 다음으로 채운다:
 
-- `e2eMs` {p50,p90,p95,p99}: **요청 수신 → 응답 완료** 전체 지연 — 비스트리밍의 표준 지표 (스트리밍 서비스가 추가로 제공해도 됨)
+- `e2eMs` {p50,p90,p95,p99}: **요청 수신 → 응답 완료** 전체 지연 — 비스트리밍의 표준 지표로 **필수** (스트리밍 서비스가 추가로 제공해도 됨)
 - `custom[]`: 표준 지표(TTFT/ITL/TPS/E2E)로 표현되지 않는 서비스 고유 지표 — `{name, unit, p50…}` 구조. **unit 필수**, 표준 지표로 표현 가능한 값은 custom에 넣지 않는다 (비교 가능성 보존)
-- custom 지표는 **해당 서비스 상세 화면에만 표시**된다 — 정의가 서비스마다 달라 서비스 간 비교·랭킹·SLO 판정에는 쓰지 않는다
+- custom 지표는 **해당 서비스의 개괄·상세 화면에 표시**된다 — 다만 정의가 서비스마다 달라 **서비스 간 비교·랭킹·SLO 판정에는 쓰지 않는다**
 
 ```json
 "serving": [
